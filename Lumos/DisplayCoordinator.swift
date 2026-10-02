@@ -67,8 +67,10 @@ final class DisplayCoordinator {
     func previewBrightness(displayID: CGDirectDisplayID, _ value: Double) {
         engines[displayID]?.previewUserBrightness(value)
     }
-    func commitBrightness(displayID: CGDirectDisplayID, _ value: Double) {
-        engines[displayID]?.commitUserBrightness(value)
+    /// Commits the level last previewed on that display; returns it (nil if the display is gone).
+    @discardableResult
+    func commitBrightness(displayID: CGDirectDisplayID) -> Double? {
+        engines[displayID]?.commitUserBrightness()
     }
 
     // MARK: - Per-app pause (ignore list)

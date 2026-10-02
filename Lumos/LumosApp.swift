@@ -286,8 +286,11 @@ struct DisplayRow: View {
                         set: { state.previewBrightness(display.id, $0) }
                     ),
                     in: 0 ... 1,
+                    // Don't pass `display.brightness` here: on macOS 27 this closure is the one
+                    // captured when the drag began, so it would commit the pre-drag value and
+                    // snap the slider back. The engine commits the level it last previewed.
                     onEditingChanged: { editing in
-                        if !editing { state.commitBrightness(display.id, display.brightness) }
+                        if !editing { state.commitBrightness(display.id) }
                     }
                 )
                 Image(systemName: "sun.max")

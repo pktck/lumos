@@ -183,8 +183,8 @@ final class AppState: ObservableObject {
         updateBrightness(id, value)
     }
 
-    func commitBrightness(_ id: CGDirectDisplayID, _ value: Double) {
-        coordinator.commitBrightness(displayID: id, value)
+    func commitBrightness(_ id: CGDirectDisplayID) {
+        guard let value = coordinator.commitBrightness(displayID: id) else { return }
         briByID[id] = value
     }
 

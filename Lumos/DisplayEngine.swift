@@ -262,12 +262,14 @@ final class DisplayEngine {
         onUpdate?(latestLuminance, v)
     }
 
-    /// Final value when the user releases the slider: apply, learn, and resume auto-adjust.
-    func commitUserBrightness(_ value: Double) {
-        let v = max(0, min(1, value))
-        currentBrightness = v
+    /// Slider released: learn the level last previewed and resume auto-adjust. Returns that level.
+    /// The value comes from the engine, not the view — the view's copy can be stale (see DisplayRow).
+    /// A press-and-release without any drag previewed nothing, so there is nothing to learn.
+    @discardableResult
+    func commitUserBrightness() -> Double {
+        guard isUserEditing else { return currentBrightness }
+        let v = currentBrightness
         targetBrightness = v
-        writeHardware(v)
         isUserEditing = false
         if ignoredMode {
             // Paused for an app: remember this as the app's preferred level, don't reshape the curve.
@@ -280,6 +282,7 @@ final class DisplayEngine {
             onUpdate?(latestLuminance, v)
             onLearn?()
         }
+        return v
     }
 
     // MARK: - Control loop (main thread)
