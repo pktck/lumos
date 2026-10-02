@@ -52,6 +52,7 @@ struct ContentView: View {
             LaunchAtLoginToggle()
 
             Divider()
+            Button("About Lumos") { AboutPanel.show() }
             Button("Quit Lumos") { NSApplication.shared.terminate(nil) }
                 .keyboardShortcut("q")
         }
@@ -61,6 +62,26 @@ struct ContentView: View {
         .onDisappear { state.popoverDisappeared() }
     }
 
+}
+
+/// The standard macOS About panel (icon, name, version, copyright from Info.plist).
+enum AboutPanel {
+    static func show() {
+        // Lumos is a menu bar (LSUIElement) app, so it's never active on its own; without this
+        // the panel opens behind the frontmost app. Taking focus also closes the menu popover.
+        NSApp.activate()
+
+        let link = "https://github.com/lenbrocki/lumos"
+        let credits = NSAttributedString(string: "github.com/lenbrocki/lumos", attributes: [
+            .link: URL(string: link)!,
+            .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+        ])
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .credits: credits,
+            // An empty build version drops the "(1)" suffix; MARKETING_VERSION is the real version.
+            .version: "",
+        ])
+    }
 }
 
 /// Login-item registration. `SMAppService` owns the state, so nothing is persisted here — the

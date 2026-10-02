@@ -234,7 +234,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Lumos;
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Lennart Brocki";
 				MARKETING_VERSION = 0.1;
 				CURRENT_PROJECT_VERSION = 1;
 				SWIFT_OBJC_BRIDGING_HEADER = "Lumos/Lumos-Bridging-Header.h";
@@ -260,7 +260,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Lumos;
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 Lennart Brocki";
 				MARKETING_VERSION = 0.1;
 				CURRENT_PROJECT_VERSION = 1;
 				SWIFT_OBJC_BRIDGING_HEADER = "Lumos/Lumos-Bridging-Header.h";
