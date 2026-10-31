@@ -87,6 +87,10 @@ final class DisplayCoordinator {
     private func finishStop() {
         releaseWork = nil
         isRunning = false
+        // The ramp can be a step short of the start level when the window closes: the engine's
+        // override debounce pauses its writes for `overrideSettleTime` once the remaining
+        // distance drops under its "ramping" threshold. Land it exactly before stopping.
+        engines.values.forEach { if $0.isReleasing { $0.restoreStartBrightness() } }
         engines.values.forEach { $0.stop() }
         engines.removeAll()
         order.removeAll()

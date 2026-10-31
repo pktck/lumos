@@ -95,6 +95,8 @@ final class DisplayEngine {
     /// Gate release in progress: content no longer retargets; the loop is ramping to
     /// `brightnessAtStart`, and the coordinator stops the engine once the fade is over.
     private var releasing = false
+    /// True from `beginRelease` until `cancelRelease` or `stop`.
+    var isReleasing: Bool { releasing }
     private var releaseDuration: TimeInterval = 0
 
     init(info: DisplayInfo, backend: BrightnessBackend) {
