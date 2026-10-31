@@ -70,6 +70,20 @@ Then launch Lumos — a sun icon appears in your menu bar. Update later with
 
 That's it — switch between a dark editor and a bright browser and watch the brightness follow.
 
+### Only when the room is dark
+
+If you only want Lumos working after the lights go down, turn on **Only when the room is dark**
+under the Auto-brightness toggle. Lumos then reads the MacBook's ambient light sensor once a
+second and adapts only while the room is darker than the threshold you set; in a bright room it
+leaves the brightness alone and doesn't capture the screen at all. The bar in the menu shows the
+current reading on a log scale with the on and off thresholds marked, so you can see what the
+gate is about to do. **Use current** sets the threshold a little above the room as it is right
+now. When the gate engages, brightness fades to the content level over a couple of seconds; when
+it releases, it fades back to where it was before. The dwell and fade times are under **Timing**.
+
+`tools/ambient-probe.swift` prints the raw sensor readings if you want to see what a given room
+measures before choosing a threshold.
+
 ## Teaching it your preference
 
 Each display has a brightness **slider** in the menu. Whenever the brightness isn't quite right:
@@ -173,6 +187,8 @@ One-time repo **secrets** (Settings → Secrets and variables → Actions):
   hubs/docks — don't support it and won't appear as controllable.
 - Capture reads rendered pixels, not emitted light, so there's no feedback loop between the
   backlight and the measurement.
+- The ambient light sensor is read through private API (`DisplayServices` or the HID sensor
+  event); if a future macOS removes it, the gate's toggle is disabled and Lumos works as before.
 
 ## Credits & license
 
