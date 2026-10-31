@@ -8,7 +8,7 @@ struct AmbientGateSettings: Codable, Equatable {
     var enabled = false
     var thresholdLux: Double = 50          // dark below this
     var enterDelay: TimeInterval = 5       // lights off: start adapting soon
-    var exitDelay: TimeInterval = 20       // lights on: do not bail on a passing light
+    var exitDelay: TimeInterval = 5        // lights on: a passing light is caught by the dwell
     var fadeDuration: TimeInterval = 2     // both directions; 0 = step
     var whenUnavailable: UnavailablePolicy = .adapt
 
@@ -24,7 +24,7 @@ struct AmbientGateSettings: Codable, Equatable {
         var s = self
         s.thresholdLux = Self.thresholdRange.clamp(thresholdLux.isFinite ? thresholdLux : 50)
         s.enterDelay = Self.enterDelayRange.clamp(enterDelay.isFinite ? enterDelay : 5)
-        s.exitDelay = Self.exitDelayRange.clamp(exitDelay.isFinite ? exitDelay : 20)
+        s.exitDelay = Self.exitDelayRange.clamp(exitDelay.isFinite ? exitDelay : 5)
         s.fadeDuration = Self.fadeDurationRange.clamp(fadeDuration.isFinite ? fadeDuration : 2)
         return s
     }

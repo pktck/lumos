@@ -341,12 +341,12 @@ struct DisplayRow: View {
 /// expected the bar is the first place to look.
 struct AmbientSection: View {
     @ObservedObject var state: AppState
-    /// Slider position (log10 lux) while dragging; nil otherwise, so the committed value shows.
+    /// Threshold (lux) while the marker is being dragged; nil otherwise, so the committed value shows.
     @State private var dragging: Double?
     @State private var timingExpanded = false
 
     private var settings: AmbientGateSettings { state.gateSettings }
-    private var previewThreshold: Double { dragging.map { pow(10, $0) } ?? settings.thresholdLux }
+    private var previewThreshold: Double { dragging ?? settings.thresholdLux }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -362,7 +362,12 @@ struct AmbientSection: View {
                     .font(.caption2).foregroundStyle(.secondary)
             } else if settings.enabled {
                 LuxBar(lux: state.ambientLux, threshold: previewThreshold, exitRatio: state.gateExitRatio,
-                       isDark: state.gateIsDark, pending: state.gatePending)
+                       pending: state.gatePending,
+                       onDrag: { lux in dragging = lux },
+                       onCommit: { lux in
+                           state.gateSettings.thresholdLux = LuxFormat.twoSignificant(lux)
+                           dragging = nil
+                       })
 
                 HStack {
                     Text(state.ambientLux.map { LuxFormat.string($0) } ?? "no reading")
@@ -372,33 +377,7 @@ struct AmbientSection: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 
-                HStack(spacing: 6) {
-                    Text("Dark below").font(.caption)
-                    Slider(
-                        value: Binding(
-                            get: { dragging ?? log10(settings.thresholdLux) },
-                            set: { dragging = $0 }
-                        ),
-                        in: 0 ... LuxBar.scaleMax,
-                        onEditingChanged: { editing in
-                            guard !editing, let d = dragging else { return }
-                            state.gateSettings.thresholdLux = LuxFormat.twoSignificant(pow(10, d))
-                            dragging = nil
-                        }
-                    )
-                    Text(LuxFormat.string(previewThreshold))
-                        .font(.caption).monospacedDigit()
-                        .frame(width: 52, alignment: .trailing)
-                    Button("Use current") {
-                        guard let lux = state.ambientLux else { return }
-                        state.gateSettings.thresholdLux = LuxFormat.twoSignificant(1.5 * lux)
-                    }
-                    .font(.caption)
-                    .disabled(state.ambientLux == nil)
-                    .help("Set the threshold to 1.5× the current reading")
-                }
-
-                DisclosureGroup("Timing", isExpanded: $timingExpanded) {
+                DisclosureGroup("Auto-enable timing", isExpanded: $timingExpanded) {
                     VStack(alignment: .leading, spacing: 4) {
                         Stepper("Start after \(Int(settings.enterDelay)) s", value: Binding(
                             get: { settings.enterDelay },
@@ -413,13 +392,6 @@ struct AmbientSection: View {
                                     get: { settings.fadeDuration },
                                     set: { state.gateSettings.fadeDuration = $0 }
                                 ), in: AmbientGateSettings.fadeDurationRange, step: 0.5)
-                        Picker("When the sensor can't be read", selection: Binding(
-                            get: { settings.whenUnavailable },
-                            set: { state.gateSettings.whenUnavailable = $0 }
-                        )) {
-                            Text("Adapt anyway").tag(AmbientGateSettings.UnavailablePolicy.adapt)
-                            Text("Don't adapt").tag(AmbientGateSettings.UnavailablePolicy.hold)
-                        }
                     }
                     .font(.caption)
                     .padding(.top, 2)
@@ -429,8 +401,10 @@ struct AmbientSection: View {
         }
     }
 
-    /// Right-hand caption: what the gate is doing, or counting down to.
+    /// Right-hand caption: the threshold, or what the gate is doing or counting down to.
     private var status: String {
+        let below = "dark below \(LuxFormat.string(previewThreshold))"
+        if dragging != nil { return below }
         if let pending = state.gatePending {
             let secs = Int(pending.remaining.rounded(.up))
             return pending.towardDark ? "dark in \(secs) s" : "bright in \(secs) s"
@@ -438,31 +412,41 @@ struct AmbientSection: View {
         if state.ambientLux == nil {
             return state.isAdapting ? "lid closed · adapting anyway" : "lid closed · paused"
         }
-        return state.isAdapting ? "adapting" : "waiting for dark"
+        return state.isAdapting ? "adapting" : below
     }
 }
 
-/// The live reading as a horizontal bar on the same log scale as the threshold slider, with the
-/// on threshold and the off threshold (× exitRatio) marked and the band between them shaded.
-/// Reading left of the band: the gate is or will be dark; right of it: bright; inside it:
-/// whatever it already is. A thin line underneath fills with the dwell while a flip is pending.
+/// The live reading as a horizontal bar on a log scale, and the threshold control: the marker
+/// at the on threshold drags, and the off threshold (× exitRatio) follows it with the band
+/// between them shaded. Reading left of the band: the gate is or will be dark; right of it:
+/// bright; inside it: whatever it already is. A thin line underneath fills with the dwell while
+/// a flip is pending.
 struct LuxBar: View {
     let lux: Double?
     let threshold: Double
     let exitRatio: Double
-    let isDark: Bool
     let pending: AmbientGate.Pending?
+    /// Threshold (lux) under the pointer while dragging, then the final value once released.
+    let onDrag: (Double) -> Void
+    let onCommit: (Double) -> Void
 
     static let scaleMax = log10(AmbientGateSettings.thresholdRange.upperBound)
+    private static let markerWidth: CGFloat = 4
 
-    /// 0 ... 1 along the bar. Same function as the slider, so a value sits at the same place on both.
+    /// 0 ... 1 along the bar.
     static func position(_ v: Double) -> Double {
         let r = AmbientGateSettings.thresholdRange
         return log10(min(max(v, r.lowerBound), r.upperBound)) / scaleMax
     }
 
+    /// The inverse: lux for a point along the bar, clamped to the settable range.
+    static func lux(atFraction f: Double) -> Double {
+        let r = AmbientGateSettings.thresholdRange
+        return min(max(pow(10, min(max(f, 0), 1) * scaleMax), r.lowerBound), r.upperBound)
+    }
+
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 3) {
             GeometryReader { geo in
                 let w = geo.size.width
                 let x0 = Self.position(threshold) * w
@@ -472,28 +456,45 @@ struct LuxBar: View {
                     Rectangle().fill(Color.orange.opacity(0.18))
                         .frame(width: max(0, x1 - x0)).offset(x: x0)
                     if let lux {
-                        Capsule().fill(isDark ? Color.accentColor : Color.secondary)
+                        Capsule().fill(Color.secondary)
                             .frame(width: max(0, Self.position(lux) * w))
                     }
-                    Rectangle().fill(Color.secondary).frame(width: 1.5).offset(x: x0 - 0.75)
                     Rectangle().fill(Color.secondary).frame(width: 1.5).offset(x: x1 - 0.75)
+                    // The handle: wider than the ticks and taller than the bar, so it reads as draggable.
+                    RoundedRectangle(cornerRadius: 1.5).fill(Color.primary)
+                        .frame(width: Self.markerWidth, height: 16)
+                        .offset(x: x0 - Self.markerWidth / 2)
                 }
-                .clipShape(Capsule())
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { v in onDrag(Self.lux(atFraction: v.location.x / w)) }
+                        .onEnded { v in onCommit(Self.lux(atFraction: v.location.x / w)) }
+                )
             }
-            .frame(height: 10)
+            .frame(height: 12)
             .animation(.linear(duration: 0.25), value: lux)   // 1 Hz updates read as motion
 
+            // The dwell line redraws on its own clock while a flip is pending, so it moves
+            // continuously between the 1 Hz readings; otherwise it is static and costs nothing.
             GeometryReader { geo in
                 if let pending {
-                    Rectangle()
-                        .fill(pending.towardDark ? Color.accentColor : Color.secondary)
-                        .frame(width: geo.size.width * pending.progress)
+                    TimelineView(.animation) { context in
+                        Rectangle()
+                            .fill(Color.primary.opacity(0.5))
+                            .frame(width: geo.size.width * pending.progress(at: context.date))
+                    }
                 }
             }
             .frame(height: 2)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Ambient light")
+        .accessibilityLabel("Ambient light, dark below \(LuxFormat.string(threshold))")
         .accessibilityValue(lux.map { LuxFormat.string($0).replacingOccurrences(of: "lx", with: "lux") } ?? "no reading")
+        .accessibilityAdjustableAction { direction in
+            let factor = direction == .increment ? 1.25 : 0.8
+            onCommit(min(max(threshold * factor, AmbientGateSettings.thresholdRange.lowerBound),
+                         AmbientGateSettings.thresholdRange.upperBound))
+        }
     }
 }

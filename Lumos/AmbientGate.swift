@@ -18,8 +18,15 @@ final class AmbientGate {
     /// A flip that is waiting out its dwell. For the menu's progress line and countdown.
     struct Pending {
         let towardDark: Bool
-        let progress: Double          // 0 ... 1 of the dwell elapsed
+        let since: Date               // when the condition started holding
+        let duration: TimeInterval    // the dwell it has to hold for
+        let progress: Double          // 0 ... 1 of the dwell elapsed, as of the call
         let remaining: TimeInterval   // seconds until the flip, if the condition keeps holding
+
+        /// Elapsed fraction at `now`, for a view that redraws between ticks.
+        func progress(at now: Date) -> Double {
+            min(1, max(0, now.timeIntervalSince(since) / max(duration, 0.001)))
+        }
     }
 
     /// Feed one reading. nil (no reading) holds the current state and clears any pending flip.
@@ -44,6 +51,8 @@ final class AmbientGate {
         let required = isDark ? exitDelay : enterDelay
         let elapsed = now.timeIntervalSince(since)
         return Pending(towardDark: !isDark,
+                       since: since,
+                       duration: required,
                        progress: min(1, elapsed / max(required, 0.001)),
                        remaining: max(0, required - elapsed))
     }
