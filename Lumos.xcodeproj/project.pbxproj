@@ -23,6 +23,9 @@
 		2222222222222222222222BE /* IgnoredAppsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111111111111111111111AF /* IgnoredAppsStore.swift */; };
 		2222222222222222222222BF /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1111111111111111111111B0 /* Assets.xcassets */; };
 		F05D24727F7989EE71D091E1 /* AmbientLightReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 053DB96858039D07E257F199 /* AmbientLightReader.swift */; };
+		9AFA0E4D9748CB8CE32D680E /* AmbientGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AACB12B220F98493ED07728 /* AmbientGate.swift */; };
+		2222222222222222222222C1 /* AmbientGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111111111111111111111C1 /* AmbientGateTests.swift */; };
+		2222222222222222222222C2 /* AmbientGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AACB12B220F98493ED07728 /* AmbientGate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -44,10 +47,20 @@
 		1111111111111111111111B0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		3333333333333333333333C1 /* Lumos.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lumos.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		053DB96858039D07E257F199 /* AmbientLightReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientLightReader.swift; sourceTree = "<group>"; };
+		2AACB12B220F98493ED07728 /* AmbientGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientGate.swift; sourceTree = "<group>"; };
+		1111111111111111111111C1 /* AmbientGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientGateTests.swift; sourceTree = "<group>"; };
+		3333333333333333333333C2 /* LumosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LumosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		6666666666666666666666F2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6666666666666666666666F5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -61,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				4444444444444444444444D2 /* Lumos */,
+				4444444444444444444444D4 /* LumosTests */,
 				4444444444444444444444D3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,6 +99,7 @@
 				1111111111111111111111AD /* Lumos-Bridging-Header.h */,
 				1111111111111111111111B0 /* Assets.xcassets */,
 				053DB96858039D07E257F199 /* AmbientLightReader.swift */,
+				2AACB12B220F98493ED07728 /* AmbientGate.swift */,
 			);
 			path = Lumos;
 			sourceTree = "<group>";
@@ -93,8 +108,17 @@
 			isa = PBXGroup;
 			children = (
 				3333333333333333333333C1 /* Lumos.app */,
+				3333333333333333333333C2 /* LumosTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		4444444444444444444444D4 /* LumosTests */ = {
+			isa = PBXGroup;
+			children = (
+				1111111111111111111111C1 /* AmbientGateTests.swift */,
+			);
+			path = LumosTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -117,6 +141,23 @@
 			productReference = 3333333333333333333333C1 /* Lumos.app */;
 			productType = "com.apple.product-type.application";
 		};
+		5555555555555555555555E2 /* LumosTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8888888888888888888888A2 /* Build configuration list for PBXNativeTarget "LumosTests" */;
+			buildPhases = (
+				6666666666666666666666F4 /* Sources */,
+				6666666666666666666666F5 /* Frameworks */,
+				6666666666666666666666F6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LumosTests;
+			productName = LumosTests;
+			productReference = 3333333333333333333333C2 /* LumosTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -128,6 +169,9 @@
 				LastUpgradeCheck = 1700;
 				TargetAttributes = {
 					5555555555555555555555E1 = {
+						CreatedOnToolsVersion = 17.0;
+					};
+					5555555555555555555555E2 = {
 						CreatedOnToolsVersion = 17.0;
 					};
 				};
@@ -146,6 +190,7 @@
 			projectRoot = "";
 			targets = (
 				5555555555555555555555E1 /* Lumos */,
+				5555555555555555555555E2 /* LumosTests */,
 			);
 		};
 /* End PBXProject section */
@@ -156,6 +201,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				2222222222222222222222BF /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6666666666666666666666F6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -181,6 +233,16 @@
 				2222222222222222222222BD /* DisplayCoordinator.swift in Sources */,
 				2222222222222222222222BE /* IgnoredAppsStore.swift in Sources */,
 				F05D24727F7989EE71D091E1 /* AmbientLightReader.swift in Sources */,
+				9AFA0E4D9748CB8CE32D680E /* AmbientGate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6666666666666666666666F4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2222222222222222222222C1 /* AmbientGateTests.swift in Sources */,
+				2222222222222222222222C2 /* AmbientGate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -277,6 +339,34 @@
 			};
 			name = Release;
 		};
+		9999999999999999999999A4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = 36WA9JF942;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lennartbrocki.LumosTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		9999999999999999999999A5 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = 36WA9JF942;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lennartbrocki.LumosTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -294,6 +384,15 @@
 			buildConfigurations = (
 				9999999999999999999999A2 /* Debug */,
 				9999999999999999999999A3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8888888888888888888888A2 /* Build configuration list for PBXNativeTarget "LumosTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9999999999999999999999A4 /* Debug */,
+				9999999999999999999999A5 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
