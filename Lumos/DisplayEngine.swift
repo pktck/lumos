@@ -83,6 +83,11 @@ final class DisplayEngine {
 
     private(set) var isRunning = false
 
+    /// Set by the coordinator before start() when the ambient-light gate triggered it: the first
+    /// content-driven retarget ramps over this many seconds instead of the jump/fast/gentle
+    /// rates, so lights-off is a fade and not a step. Consumed once.
+    var pendingFade: TimeInterval?
+
     init(info: DisplayInfo, backend: BrightnessBackend) {
         self.info = info
         self.backend = backend
@@ -314,7 +319,11 @@ final class DisplayEngine {
         if settled, !ignoredMode {
             let newTarget = model.brightness(forLuminance: stabilizer.committed)
             let delta = newTarget - currentBrightness
-            if abs(delta) >= jumpThreshold {
+            let fade = pendingFade
+            pendingFade = nil                                   // one shot, even when delta is 0
+            if let fade, fade > 0, abs(delta) > 0.0005 {
+                rampPerSecond = max(abs(delta) / fade, 0.01)    // linear fade-in over `fade` seconds
+            } else if abs(delta) >= jumpThreshold {
                 // Dimming (content got brighter) is sped up to minimize the brightness flare;
                 // brightening stays gentler so it doesn't flash.
                 rampPerSecond = delta < 0 ? dimRampPerSecond : fastRampPerSecond

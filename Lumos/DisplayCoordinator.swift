@@ -37,6 +37,8 @@ final class DisplayCoordinator {
     private let ignoreStore = IgnoredAppsStore()
     private var isRunning = false
     private var observing = false
+    /// Fade handed to the engines created by the next rebuild (a gate-triggered start).
+    private var initialFade: TimeInterval?
 
     /// Most recent frontmost app that isn't Lumos itself — the app the "pause" control acts on.
     private(set) var lastActiveBundleID: String?
@@ -46,9 +48,12 @@ final class DisplayCoordinator {
 
     var displays: [DisplayInfo] { order.compactMap { engines[$0]?.info } }
 
-    func start() {
+    /// Starts adapting. `fadeIn` applies to the engines created by this start, not to later
+    /// hotplug: the first content retarget ramps over that many seconds.
+    func start(fadeIn: TimeInterval? = nil) {
         guard !isRunning else { return }
         isRunning = true
+        initialFade = fadeIn
         rebuild()
         observeHotplug()
     }
@@ -159,6 +164,7 @@ final class DisplayCoordinator {
                 self.ignoreStore.setPreferredBrightness(value, bundleID: bundleID,
                                                          persistKey: info.persistKey)
             }
+            engine.pendingFade = initialFade
             engines[info.displayID] = engine
             engine.start()
         }
@@ -166,6 +172,7 @@ final class DisplayCoordinator {
         order = desired.map { $0.info.displayID }
         applyIgnoreState() // newly created engines need the current pause state pushed to them
         onDisplaysChanged?()
+        initialFade = nil
     }
 
     private func currentControllableDisplays() -> [(info: DisplayInfo, backend: BrightnessBackend)] {

@@ -158,6 +158,7 @@ final class AppState: ObservableObject {
         gateArmed ? startPolling() : stopPolling()
 
         let shouldRun: Bool
+        var viaGate = false                                    // true when the gate itself decided
         if !isEnabled {
             shouldRun = false
         } else if !gateSettings.enabled {
@@ -166,9 +167,11 @@ final class AppState: ObservableObject {
             shouldRun = gateSettings.whenUnavailable == .adapt // fail open by default
         } else {
             shouldRun = gate.isDark
+            viaGate = true
         }
 
-        if shouldRun, !isAdapting { startEngines() }
+        // Fades belong to gate decisions. A stock start stays as today.
+        if shouldRun, !isAdapting { startEngines(fadeIn: viaGate ? gateSettings.fadeDuration : nil) }
         if !shouldRun, isAdapting { stopEngines() }
     }
 
@@ -198,11 +201,11 @@ final class AppState: ObservableObject {
         gatePending = nil
     }
 
-    private func startEngines() {
+    private func startEngines(fadeIn: TimeInterval?) {
         lastErrorMessage = nil
         captureBlocked = false
         receivedAnyFrame = false
-        coordinator.start()
+        coordinator.start(fadeIn: fadeIn)
         startCaptureWatchdog()
         isAdapting = true
     }
