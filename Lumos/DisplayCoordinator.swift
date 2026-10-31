@@ -39,6 +39,8 @@ final class DisplayCoordinator {
     private var observing = false
     /// Fade handed to the engines created by the next rebuild (a gate-triggered start).
     private var initialFade: TimeInterval?
+    /// Pending teardown at the end of a gate release; cancelled if the gate re-triggers.
+    private var releaseWork: DispatchWorkItem?
 
     /// Most recent frontmost app that isn't Lumos itself — the app the "pause" control acts on.
     private(set) var lastActiveBundleID: String?
@@ -49,8 +51,15 @@ final class DisplayCoordinator {
     var displays: [DisplayInfo] { order.compactMap { engines[$0]?.info } }
 
     /// Starts adapting. `fadeIn` applies to the engines created by this start, not to later
-    /// hotplug: the first content retarget ramps over that many seconds.
+    /// hotplug: the first content retarget ramps over that many seconds. Called during a
+    /// fade-out, it cancels the release and resumes instead of rebuilding.
     func start(fadeIn: TimeInterval? = nil) {
+        if let work = releaseWork {
+            work.cancel(); releaseWork = nil
+            engines.values.forEach { $0.cancelRelease() }
+            applyIgnoreState() // a paused app frontmost mid-fade gets its level back, not content
+            return
+        }
         guard !isRunning else { return }
         isRunning = true
         initialFade = fadeIn
@@ -58,8 +67,25 @@ final class DisplayCoordinator {
         observeHotplug()
     }
 
-    func stop() {
+    /// Stops adapting. nil: immediate teardown, brightness left where it is (today's behavior;
+    /// the user's toggle). 0: step each display back to its start level, then tear down. > 0:
+    /// fade back over that many seconds, then tear down.
+    func stop(fadeOut: TimeInterval? = nil) {
         guard isRunning else { return }
+        releaseWork?.cancel(); releaseWork = nil
+        guard let fadeOut else { finishStop(); return }
+        if fadeOut <= 0 {
+            engines.values.forEach { $0.restoreStartBrightness() }
+            finishStop(); return
+        }
+        engines.values.forEach { $0.beginRelease(over: fadeOut) }
+        let work = DispatchWorkItem { [weak self] in self?.finishStop() }
+        releaseWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + fadeOut + 0.25, execute: work)
+    }
+
+    private func finishStop() {
+        releaseWork = nil
         isRunning = false
         engines.values.forEach { $0.stop() }
         engines.removeAll()

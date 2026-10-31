@@ -170,9 +170,11 @@ final class AppState: ObservableObject {
             viaGate = true
         }
 
-        // Fades belong to gate decisions. A stock start stays as today.
+        // Fades belong to gate decisions. A stock start and the user's own toggle-off stay as today.
         if shouldRun, !isAdapting { startEngines(fadeIn: viaGate ? gateSettings.fadeDuration : nil) }
-        if !shouldRun, isAdapting { stopEngines() }
+        if !shouldRun, isAdapting { stopEngines(fadeOut: isEnabled ? gateSettings.fadeDuration : nil) }
+        // The toggle-off also ends a fade-out still in progress, the way a manual stop always has.
+        if !isEnabled { coordinator.stop(fadeOut: nil) }
     }
 
     private func startPolling() {
@@ -210,8 +212,8 @@ final class AppState: ObservableObject {
         isAdapting = true
     }
 
-    private func stopEngines() {
-        coordinator.stop()
+    private func stopEngines(fadeOut: TimeInterval?) {
+        coordinator.stop(fadeOut: fadeOut)   // nil: immediate, as today. A duration: fade back, then tear down.
         captureWatchdog?.invalidate(); captureWatchdog = nil
         captureBlocked = false
         lumByID.removeAll(); briByID.removeAll()
@@ -336,6 +338,12 @@ final class AppState: ObservableObject {
         // popover is closed and is fresh on open.
         ambientLux = latestLux
         gatePending = gate.pending()
+        // During a gate release the coordinator still owns engines and keeps calling onUpdate;
+        // the rows must not reappear for the length of the fade.
+        guard isAdapting else {
+            if !displays.isEmpty { displays = [] }
+            return
+        }
         displays = coordinator.displays.map { info in
             DisplayVM(id: info.displayID,
                       name: info.name,

@@ -55,6 +55,9 @@ final class DDCBrightnessBackend: BrightnessBackend {
     /// background queue, and interleaving them on one service garbles both.
     private let ioLock = NSLock()
     private(set) var lastWritten: Double
+    /// Last raw value sent, so a 60 Hz ramp doesn't repeat the same I2C write; cleared when the
+    /// monitor reports something else, so Lumos never skips a write it does need.
+    private var lastRaw: UInt16?
 
     init?(match: Arm64DDC.Arm64Service) {
         guard match.service != nil, !match.dummy else { return nil }
@@ -80,6 +83,7 @@ final class DDCBrightnessBackend: BrightnessBackend {
         ioLock.lock(); defer { ioLock.unlock() }
         guard let r = Arm64DDC.read(service: service, command: 0x10), r.max > 0, r.current <= r.max
         else { return nil }
+        if r.current != lastRaw { lastRaw = nil }
         return Double(r.current) / Double(r.max)
     }
 
@@ -88,6 +92,8 @@ final class DDCBrightnessBackend: BrightnessBackend {
         lastWritten = clamped
         let raw = UInt16((Double(maxValue) * clamped).rounded())
         ioLock.lock(); defer { ioLock.unlock() }
+        if raw == lastRaw { return }
+        lastRaw = raw
         _ = Arm64DDC.write(service: service, command: 0x10, value: raw)
     }
 

@@ -88,6 +88,15 @@ final class DisplayEngine {
     /// rates, so lights-off is a fade and not a step. Consumed once.
     var pendingFade: TimeInterval?
 
+    /// Hardware level read when this engine started: the brightness before Lumos took over for
+    /// this run. A gate release returns here, not to the last manual level.
+    private(set) var brightnessAtStart: Double?
+
+    /// Gate release in progress: content no longer retargets; the loop is ramping to
+    /// `brightnessAtStart`, and the coordinator stops the engine once the fade is over.
+    private var releasing = false
+    private var releaseDuration: TimeInterval = 0
+
     init(info: DisplayInfo, backend: BrightnessBackend) {
         self.info = info
         self.backend = backend
@@ -106,6 +115,7 @@ final class DisplayEngine {
         if let hw = backend.read() {
             currentBrightness = hw
             targetBrightness = hw
+            brightnessAtStart = hw
         }
 
         stabilizer = LuminanceStabilizer()
@@ -153,9 +163,12 @@ final class DisplayEngine {
             // Retarget to what the current (already-settled) content wants, so the loop ramps
             // from the true hardware level to the content-appropriate brightness. If no content
             // has settled yet, leave the target at the hardware level and let frames drive it.
-            targetBrightness = stabilizer.committed >= 0
-                ? model.brightness(forLuminance: stabilizer.committed)
-                : hw
+            // A gate release in progress keeps its own target.
+            if !releasing {
+                targetBrightness = stabilizer.committed >= 0
+                    ? model.brightness(forLuminance: stabilizer.committed)
+                    : hw
+            }
             ensureControlTimer() // guarantee the ramp runs even if no new frame arrives
         }
         launchCapture()
@@ -226,17 +239,21 @@ final class DisplayEngine {
     /// otherwise it simply holds where it is until the user picks a level. Leaving paused mode
     /// resumes adaptation from the current content.
     func setIgnored(_ ignored: Bool, preferredBrightness: Double?) {
+        // While a gate release is fading back, the pause state is recorded but doesn't retarget;
+        // the release owns the backlight until the coordinator stops the engine.
         if ignored {
             ignoredPreferred = preferredBrightness
             if let pref = preferredBrightness {
                 ignoredMode = true
-                targetBrightness = max(0, min(1, pref))
-                rampPerSecond = gentleRampPerSecond
-                ensureControlTimer()
+                if !releasing {
+                    targetBrightness = max(0, min(1, pref))
+                    rampPerSecond = gentleRampPerSecond
+                    ensureControlTimer()
+                }
             } else if !ignoredMode {
                 // No remembered level yet — stop adapting and hold the current brightness.
                 ignoredMode = true
-                targetBrightness = currentBrightness
+                if !releasing { targetBrightness = currentBrightness }
             } else {
                 ignoredMode = true
             }
@@ -244,6 +261,7 @@ final class DisplayEngine {
             guard ignoredMode else { return }
             ignoredMode = false
             ignoredPreferred = nil
+            guard !releasing else { return }
             // Resume auto-adjust: retarget to what the current content wants and ramp there.
             let newTarget = model.brightness(forLuminance: max(0, min(1, latestLuminance)))
             let delta = newTarget - currentBrightness
@@ -253,6 +271,50 @@ final class DisplayEngine {
             targetBrightness = newTarget
             ensureControlTimer()
         }
+    }
+
+    // MARK: - Gate release (fade back to the pre-gate level)
+
+    /// Ramp back to `brightnessAtStart` over `duration`, decoupled from content. Capture keeps
+    /// running (the fade is seconds long); the coordinator calls stop() when it is over.
+    func beginRelease(over duration: TimeInterval) {
+        guard isRunning, !releasing else { return }
+        releasing = true
+        releaseDuration = duration
+        pendingFade = nil
+        pendingOverride = nil
+        overrideDebounce?.cancel(); overrideDebounce = nil
+        isUserEditing = false
+        let level = brightnessAtStart ?? currentBrightness
+        targetBrightness = level
+        rampPerSecond = duration > 0 ? max(abs(level - currentBrightness) / duration, 0.01) : dimRampPerSecond
+        ensureControlTimer()
+    }
+
+    /// The gate re-triggered mid-fade: resume adapting from wherever the brightness is, turning
+    /// around at the fade's pace (the same duration over the new distance) with no step.
+    func cancelRelease() {
+        guard releasing else { return }
+        releasing = false
+        let newTarget = model.brightness(forLuminance: max(0, min(1, latestLuminance)))
+        let delta = newTarget - currentBrightness
+        if releaseDuration > 0 {
+            rampPerSecond = max(abs(delta) / releaseDuration, 0.01)
+        } else {
+            rampPerSecond = abs(delta) >= jumpThreshold
+                ? (delta < 0 ? dimRampPerSecond : fastRampPerSecond)
+                : gentleRampPerSecond
+        }
+        targetBrightness = newTarget
+        ensureControlTimer()
+    }
+
+    /// Step version, used when the fade is 0. Call right before stop().
+    func restoreStartBrightness() {
+        guard let level = brightnessAtStart else { return }
+        currentBrightness = level
+        targetBrightness = level
+        writeHardware(level)
     }
 
     // MARK: - Manual correction (slider)
@@ -316,7 +378,7 @@ final class DisplayEngine {
         // Keep advancing the stabilizer so `committed` stays fresh for when we resume, but only
         // retarget from content while not paused for an ignored app.
         let settled = stabilizer.update(luminance: latestLuminance, now: now)
-        if settled, !ignoredMode {
+        if settled, !ignoredMode, !releasing {
             let newTarget = model.brightness(forLuminance: stabilizer.committed)
             let delta = newTarget - currentBrightness
             let fade = pendingFade
@@ -350,7 +412,7 @@ final class DisplayEngine {
         // the backlight has settled — even if the (ignored) content keeps changing.
         let luminanceSettled = abs(latestLuminance - stabilizer.committed) <= stabilizer.noiseBand
         let brightnessSettled = abs(targetBrightness - currentBrightness) <= 0.0005
-        let canStop = brightnessSettled && (ignoredMode || luminanceSettled)
+        let canStop = brightnessSettled && (ignoredMode || releasing || luminanceSettled)
         if !isUserAdjustingBrightness, !isUserEditing, canStop {
             controlTimer?.invalidate()
             controlTimer = nil
@@ -384,7 +446,7 @@ final class DisplayEngine {
     /// `overrideThreshold` check in `commitBrightnessOverrideIfNeeded` filters out. We debounce
     /// so a brightness key held down (which ramps in many small steps) commits a single override.
     private func handleBrightnessChangeNotification() {
-        guard !isActivelyRamping, !isUserEditing else { return }
+        guard isRunning, !isActivelyRamping, !isUserEditing else { return }
         overrideDebounce?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.commitBrightnessOverrideIfNeeded() }
         overrideDebounce = work
