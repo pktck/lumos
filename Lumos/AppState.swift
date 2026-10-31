@@ -35,9 +35,12 @@ final class AppState: ObservableObject {
     /// The ambient-light gate's decision: true while the room counts as dark.
     @Published private(set) var gateIsDark = false
     /// The reading the gate is acting on, for the lux bar. Flushed only while the popover is open.
-    @Published private(set) var ambientLux: Double?
+    /// The live sensor readout, observed by the bar alone: a reading five times a second must
+    /// not re-evaluate the whole popover.
+    let ambientReadout = AmbientReadout()
+    var ambientLux: Double? { ambientReadout.lux }
     /// Dwell progress of a flip the gate is waiting out, for the bar. Same flush rule.
-    @Published private(set) var gatePending: AmbientGate.Pending?
+    var gatePending: AmbientGate.Pending? { ambientReadout.pending }
     @Published var gateSettings = AmbientGateSettings() {
         didSet {
             // Observers don't re-fire for an assignment inside their own didSet.
@@ -182,14 +185,16 @@ final class AppState: ObservableObject {
     private func startPolling() {
         guard !polling else { return }
         polling = true
-        ambient.start { [weak self] lux in                     // main thread, ~1 Hz
+        ambient.start(interval: popoverVisible ? Self.ambientIntervalOpen : Self.ambientIntervalClosed) { [weak self] lux in   // main thread
             guard let self, self.polling else { return }       // a tick can land after stopPolling()
             self.latestLux = lux
             let wasUnreadable = self.sensorUnreadable
             self.sensorUnreadable = (lux == nil)
             self.gate.ingest(lux: lux)                          // may call onChange, which reconciles
             if wasUnreadable != self.sensorUnreadable { self.reconcile() }
-            self.scheduleFlush()                                // bar and countdown refresh, popover-open only
+            // The bar follows the reading directly: a tick must not go through the display
+            // flush, which republishes the rows and re-evaluates the whole popover.
+            if self.popoverVisible { self.ambientReadout.update(lux: lux, pending: self.gate.pending()) }
         }
     }
 
@@ -201,8 +206,7 @@ final class AppState: ObservableObject {
         latestLux = nil
         sensorUnreadable = false
         gateIsDark = false
-        ambientLux = nil
-        gatePending = nil
+        ambientReadout.update(lux: nil, pending: nil)
     }
 
     private func startEngines(fadeIn: TimeInterval?) {
@@ -325,9 +329,19 @@ final class AppState: ObservableObject {
         popoverVisible = true
         rebuildDisplays(force: true)
         refreshIgnoreState(force: true)
+        ambient.setInterval(Self.ambientIntervalOpen)
     }
 
-    func popoverDisappeared() { popoverVisible = false }
+    func popoverDisappeared() {
+        popoverVisible = false
+        ambient.setInterval(Self.ambientIntervalClosed)
+    }
+
+    /// Sensor cadence. Closed, one read a second is plenty for a gate with seconds of dwell and
+    /// costs nothing measurable; open, the bar is being watched, so it follows the room at 5 Hz
+    /// for as long as the menu is up.
+    private static let ambientIntervalClosed: TimeInterval = 1.0
+    private static let ambientIntervalOpen: TimeInterval = 0.2
 
     private func scheduleFlush() {
         guard popoverVisible, !flushScheduled else { return }
@@ -342,8 +356,7 @@ final class AppState: ObservableObject {
         guard force || popoverVisible else { return }
         // The ambient readout rides the same flush as the rows, so it never publishes while the
         // popover is closed and is fresh on open.
-        ambientLux = latestLux
-        gatePending = gate.pending()
+        ambientReadout.update(lux: latestLux, pending: gate.pending())
         // During a gate release the coordinator still owns engines and keeps calling onUpdate;
         // the rows must not reappear for the length of the fade.
         guard isAdapting else {
@@ -364,5 +377,18 @@ final class AppState: ObservableObject {
     private func updateBrightness(_ id: CGDirectDisplayID, _ value: Double) {
         guard let idx = displays.firstIndex(where: { $0.id == id }) else { return }
         displays[idx].brightness = value
+    }
+}
+
+/// What the lux bar shows. Published only on change: the bar's dwell line and countdown run on
+/// their own clock from `pending`, so a pending flip is one value for its whole dwell.
+@MainActor
+final class AmbientReadout: ObservableObject {
+    @Published private(set) var lux: Double?
+    @Published private(set) var pending: AmbientGate.Pending?
+
+    func update(lux newLux: Double?, pending newPending: AmbientGate.Pending?) {
+        if lux != newLux { lux = newLux }
+        if pending != newPending { pending = newPending }
     }
 }

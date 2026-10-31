@@ -74,21 +74,26 @@ final class HIDLuxSource: AmbientLightSource {
     }
 }
 
-/// Picks the first source that resolved at launch and logs the choice. The order is a constant:
-/// A first, B as fallback; flip it if the probe shows A lagging or stuck. Non-finite or negative
-/// values are rejected here so no caller has to.
+/// Reads the sources in order and returns the first good value, so a route that resolves but
+/// goes quiet falls through to the next one on that tick. The HID event comes first: it is the
+/// raw sensor and moves with the room, where `AggregatedLux` is `backlightd`'s smoothed figure
+/// and held still most of the time (54 changes against 632 over the same 15 minutes). Non-finite
+/// or negative values are rejected here so no caller has to.
 final class CompositeLuxSource: AmbientLightSource {
-    private let chosen: AmbientLightSource?
+    private let sources: [AmbientLightSource]
 
-    init(order: [AmbientLightSource] = [DisplayServicesLuxSource(), HIDLuxSource()]) {
-        chosen = order.first { $0.isAvailable }
-        NSLog("Lumos: ambient light source: \(chosen.map { String(describing: type(of: $0)) } ?? "none")")
+    init(order: [AmbientLightSource] = [HIDLuxSource(), DisplayServicesLuxSource()]) {
+        sources = order.filter { $0.isAvailable }
+        NSLog("Lumos: ambient light sources: \(sources.map { String(describing: type(of: $0)) }.joined(separator: ", "))")
     }
 
-    var isAvailable: Bool { chosen != nil }
+    var isAvailable: Bool { !sources.isEmpty }
 
     func readLux() -> Double? {
-        guard let lux = chosen?.readLux(), lux.isFinite, lux >= 0 else { return nil }
-        return lux
+        for source in sources {
+            if let lux = source.readLux(), lux.isFinite, lux >= 0 { return lux }
+        }
+        return nil
     }
+
 }

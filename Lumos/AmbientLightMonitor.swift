@@ -22,13 +22,30 @@ final class AmbientLightMonitor {
     func start(interval: TimeInterval = 1.0, handler: @escaping (Double?) -> Void) {
         stop()
         let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now(), repeating: interval, leeway: .milliseconds(200))
+        t.schedule(deadline: .now(), repeating: interval, leeway: leeway(for: interval))
         t.setEventHandler { [source] in
             let lux: Double? = BrightnessController.activeBuiltInDisplayID() == nil ? nil : source.readLux()
             DispatchQueue.main.async { handler(lux) }
         }
         t.resume()
         timer = t
+        self.interval = interval
+    }
+
+    /// Change the cadence of a running monitor; the next tick comes at the new interval. The
+    /// menu asks for a faster one while it is open, where the reading is being watched.
+    func setInterval(_ newInterval: TimeInterval) {
+        guard let timer, newInterval != interval else { return }
+        interval = newInterval
+        timer.schedule(deadline: .now() + newInterval, repeating: newInterval, leeway: leeway(for: newInterval))
+    }
+
+    private(set) var interval: TimeInterval = 1.0
+
+    /// A fifth of the interval: lets the kernel coalesce the 1 Hz wake-ups, keeps a fast
+    /// cadence regular.
+    private func leeway(for interval: TimeInterval) -> DispatchTimeInterval {
+        .milliseconds(Int(interval * 200))
     }
 
     func stop() {

@@ -16,7 +16,7 @@ final class AmbientGate {
     var onChange: ((Bool) -> Void)?
 
     /// A flip that is waiting out its dwell. For the menu's progress line and countdown.
-    struct Pending {
+    struct Pending: Equatable {
         let towardDark: Bool
         let since: Date               // when the condition started holding
         let duration: TimeInterval    // the dwell it has to hold for
@@ -26,6 +26,16 @@ final class AmbientGate {
         /// Elapsed fraction at `now`, for a view that redraws between ticks.
         func progress(at now: Date) -> Double {
             min(1, max(0, now.timeIntervalSince(since) / max(duration, 0.001)))
+        }
+
+        /// Seconds left at `now`.
+        func remaining(at now: Date) -> TimeInterval {
+            max(0, duration - now.timeIntervalSince(since))
+        }
+
+        /// The same dwell, whatever the clock says: a view with its own clock needs no new value.
+        static func == (a: Pending, b: Pending) -> Bool {
+            a.towardDark == b.towardDark && a.since == b.since && a.duration == b.duration
         }
     }
 
