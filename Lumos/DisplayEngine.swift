@@ -296,7 +296,10 @@ final class DisplayEngine {
     func cancelRelease() {
         guard releasing else { return }
         releasing = false
-        let newTarget = model.brightness(forLuminance: max(0, min(1, latestLuminance)))
+        // Paused for an app: back to its level (or hold), not to content.
+        let newTarget = ignoredMode
+            ? (ignoredPreferred ?? currentBrightness)
+            : model.brightness(forLuminance: max(0, min(1, latestLuminance)))
         let delta = newTarget - currentBrightness
         if releaseDuration > 0 {
             rampPerSecond = max(abs(delta) / releaseDuration, 0.01)

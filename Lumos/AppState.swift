@@ -163,8 +163,10 @@ final class AppState: ObservableObject {
             shouldRun = false
         } else if !gateSettings.enabled {
             shouldRun = true                                   // stock Lumos
-        } else if !ambient.isAvailable || sensorUnreadable {
-            shouldRun = gateSettings.whenUnavailable == .adapt // fail open by default
+        } else if !ambient.isAvailable {
+            shouldRun = true                                   // no sensor on this macOS: gate off
+        } else if sensorUnreadable {
+            shouldRun = gateSettings.whenUnavailable == .adapt // lid closed: fail open by default
         } else {
             shouldRun = gate.isDark
             viaGate = true
@@ -181,7 +183,7 @@ final class AppState: ObservableObject {
         guard !polling else { return }
         polling = true
         ambient.start { [weak self] lux in                     // main thread, ~1 Hz
-            guard let self else { return }
+            guard let self, self.polling else { return }       // a tick can land after stopPolling()
             self.latestLux = lux
             let wasUnreadable = self.sensorUnreadable
             self.sensorUnreadable = (lux == nil)
@@ -207,9 +209,13 @@ final class AppState: ObservableObject {
         lastErrorMessage = nil
         captureBlocked = false
         receivedAnyFrame = false
+        isAdapting = true                 // before start(): its rebuild publishes the rows only while adapting
         coordinator.start(fadeIn: fadeIn)
         startCaptureWatchdog()
-        isAdapting = true
+        // A restart doesn't re-seed the pause state or, when it resumes a fade, the rows; refresh
+        // both (popover-only) so an open menu is current at once.
+        rebuildDisplays()
+        refreshIgnoreState()
     }
 
     private func stopEngines(fadeOut: TimeInterval?) {

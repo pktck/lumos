@@ -93,8 +93,7 @@ final class DDCBrightnessBackend: BrightnessBackend {
         let raw = UInt16((Double(maxValue) * clamped).rounded())
         ioLock.lock(); defer { ioLock.unlock() }
         if raw == lastRaw { return }
-        lastRaw = raw
-        _ = Arm64DDC.write(service: service, command: 0x10, value: raw)
+        if Arm64DDC.write(service: service, command: 0x10, value: raw) { lastRaw = raw }
     }
 
     // DDC monitors have no change-notification path; the engine polls via `backgroundPollInterval`.
