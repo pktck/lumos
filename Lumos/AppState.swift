@@ -27,7 +27,11 @@ final class AppState: ObservableObject {
         let isIgnored: Bool
     }
 
+    /// The user's toggle: "I want Lumos adapting". Per-session on purpose; it starts off.
     @Published var isEnabled = false
+    /// True while the coordinator is running. Equal to `isEnabled` unless something is holding
+    /// the engines back on the user's behalf.
+    @Published private(set) var isAdapting = false
     @Published var displays: [DisplayVM] = []
     @Published var ignoredApps: [IgnoredAppVM] = []
     @Published var currentApp: CurrentAppVM?
@@ -98,25 +102,44 @@ final class AppState: ObservableObject {
 
     func setEnabled(_ on: Bool) {
         if on {
+            // The Screen Recording request stays on the user's click, where there is a user
+            // action behind the panel.
             if !LuminanceSampler.hasPermission() {
                 LuminanceSampler.requestPermission()
             }
             hasScreenPermission = LuminanceSampler.hasPermission()
-            lastErrorMessage = nil
-            captureBlocked = false
-            receivedAnyFrame = false
-            coordinator.start()
-            startCaptureWatchdog()
-        } else {
-            coordinator.stop()
-            captureWatchdog?.invalidate(); captureWatchdog = nil
-            captureBlocked = false
-            lumByID.removeAll(); briByID.removeAll()
-            displays = []
-            ignoredApps = []
-            currentApp = nil
         }
         isEnabled = on
+        reconcile()
+    }
+
+    /// The single place that decides whether the engines run. Idempotent and cheap: call it
+    /// after any input changes. Keeping the decision separate from `setEnabled` lets something
+    /// other than the toggle (the ambient-light gate) start and stop the engines.
+    private func reconcile() {
+        let shouldRun = isEnabled
+        if shouldRun, !isAdapting { startEngines() }
+        if !shouldRun, isAdapting { stopEngines() }
+    }
+
+    private func startEngines() {
+        lastErrorMessage = nil
+        captureBlocked = false
+        receivedAnyFrame = false
+        coordinator.start()
+        startCaptureWatchdog()
+        isAdapting = true
+    }
+
+    private func stopEngines() {
+        coordinator.stop()
+        captureWatchdog?.invalidate(); captureWatchdog = nil
+        captureBlocked = false
+        lumByID.removeAll(); briByID.removeAll()
+        displays = []
+        ignoredApps = []
+        currentApp = nil
+        isAdapting = false
     }
 
     // MARK: - Per-app pause (ignore list)
@@ -174,7 +197,7 @@ final class AppState: ObservableObject {
     }
 
     private func checkCaptureWatchdog() {
-        guard isEnabled, !receivedAnyFrame else { return }
+        guard isAdapting, !receivedAnyFrame else { return }
         hasScreenPermission = LuminanceSampler.hasPermission()
         captureBlocked = true
     }

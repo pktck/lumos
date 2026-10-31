@@ -31,7 +31,7 @@ struct ContentView: View {
                     .foregroundStyle(.orange)
             }
 
-            if state.isEnabled {
+            if state.isAdapting {
                 if state.displays.isEmpty {
                     Text("Detecting displays…").foregroundStyle(.secondary)
                 } else {
