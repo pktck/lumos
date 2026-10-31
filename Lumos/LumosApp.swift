@@ -7,7 +7,9 @@ struct LumosApp: App {
     @StateObject private var state = AppState()
 
     var body: some Scene {
-        MenuBarExtra("Lumos", systemImage: state.isEnabled ? "sun.max.fill" : "sun.max") {
+        // Three states: adapting, armed and waiting for a dark room, off.
+        MenuBarExtra("Lumos", systemImage: state.isAdapting ? "sun.max.fill"
+                                          : (state.isEnabled ? "sun.min" : "sun.max")) {
             ContentView(state: state)
         }
         .menuBarExtraStyle(.window)
@@ -29,6 +31,10 @@ struct ContentView: View {
             if !state.builtInBrightnessAvailable {
                 Label("Brightness control unavailable", systemImage: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
+            }
+
+            if state.isEnabled {
+                AmbientSection(state: state)
             }
 
             if state.isAdapting {
@@ -327,5 +333,167 @@ struct DisplayRow: View {
         }
         .padding(8)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// Ambient-light gate: adapt only while the room is darker than a threshold. Shows the live
+/// reading on a log scale with both thresholds marked, so when the gate hasn't done what you
+/// expected the bar is the first place to look.
+struct AmbientSection: View {
+    @ObservedObject var state: AppState
+    /// Slider position (log10 lux) while dragging; nil otherwise, so the committed value shows.
+    @State private var dragging: Double?
+    @State private var timingExpanded = false
+
+    private var settings: AmbientGateSettings { state.gateSettings }
+    private var previewThreshold: Double { dragging.map { pow(10, $0) } ?? settings.thresholdLux }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Only when the room is dark", isOn: Binding(
+                get: { settings.enabled },
+                set: { state.gateSettings.enabled = $0 }
+            ))
+            .toggleStyle(.switch)
+            .disabled(!state.ambientAvailable)
+
+            if !state.ambientAvailable {
+                Text("Ambient light sensor unavailable on this macOS")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else if settings.enabled {
+                LuxBar(lux: state.ambientLux, threshold: previewThreshold, exitRatio: state.gateExitRatio,
+                       isDark: state.gateIsDark, pending: state.gatePending)
+
+                HStack {
+                    Text(state.ambientLux.map { LuxFormat.string($0) } ?? "no reading")
+                    Spacer()
+                    Text(status)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+                HStack(spacing: 6) {
+                    Text("Dark below").font(.caption)
+                    Slider(
+                        value: Binding(
+                            get: { dragging ?? log10(settings.thresholdLux) },
+                            set: { dragging = $0 }
+                        ),
+                        in: 0 ... LuxBar.scaleMax,
+                        onEditingChanged: { editing in
+                            guard !editing, let d = dragging else { return }
+                            state.gateSettings.thresholdLux = LuxFormat.twoSignificant(pow(10, d))
+                            dragging = nil
+                        }
+                    )
+                    Text(LuxFormat.string(previewThreshold))
+                        .font(.caption).monospacedDigit()
+                        .frame(width: 52, alignment: .trailing)
+                    Button("Use current") {
+                        guard let lux = state.ambientLux else { return }
+                        state.gateSettings.thresholdLux = LuxFormat.twoSignificant(1.5 * lux)
+                    }
+                    .font(.caption)
+                    .disabled(state.ambientLux == nil)
+                    .help("Set the threshold to 1.5× the current reading")
+                }
+
+                DisclosureGroup("Timing", isExpanded: $timingExpanded) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Stepper("Start after \(Int(settings.enterDelay)) s", value: Binding(
+                            get: { settings.enterDelay },
+                            set: { state.gateSettings.enterDelay = $0 }
+                        ), in: AmbientGateSettings.enterDelayRange, step: 1)
+                        Stepper("Stop after \(Int(settings.exitDelay)) s", value: Binding(
+                            get: { settings.exitDelay },
+                            set: { state.gateSettings.exitDelay = $0 }
+                        ), in: AmbientGateSettings.exitDelayRange, step: 5)
+                        Stepper(settings.fadeDuration > 0 ? "Fade \(LuxFormat.seconds(settings.fadeDuration))" : "Fade off",
+                                value: Binding(
+                                    get: { settings.fadeDuration },
+                                    set: { state.gateSettings.fadeDuration = $0 }
+                                ), in: AmbientGateSettings.fadeDurationRange, step: 0.5)
+                        Picker("When the sensor can't be read", selection: Binding(
+                            get: { settings.whenUnavailable },
+                            set: { state.gateSettings.whenUnavailable = $0 }
+                        )) {
+                            Text("Adapt anyway").tag(AmbientGateSettings.UnavailablePolicy.adapt)
+                            Text("Don't adapt").tag(AmbientGateSettings.UnavailablePolicy.hold)
+                        }
+                    }
+                    .font(.caption)
+                    .padding(.top, 2)
+                }
+                .font(.caption)
+            }
+        }
+    }
+
+    /// Right-hand caption: what the gate is doing, or counting down to.
+    private var status: String {
+        if let pending = state.gatePending {
+            let secs = Int(pending.remaining.rounded(.up))
+            return pending.towardDark ? "dark in \(secs) s" : "bright in \(secs) s"
+        }
+        if state.ambientLux == nil {
+            return state.isAdapting ? "lid closed · adapting anyway" : "lid closed · paused"
+        }
+        return state.isAdapting ? "adapting" : "waiting for dark"
+    }
+}
+
+/// The live reading as a horizontal bar on the same log scale as the threshold slider, with the
+/// on threshold and the off threshold (× exitRatio) marked and the band between them shaded.
+/// Reading left of the band: the gate is or will be dark; right of it: bright; inside it:
+/// whatever it already is. A thin line underneath fills with the dwell while a flip is pending.
+struct LuxBar: View {
+    let lux: Double?
+    let threshold: Double
+    let exitRatio: Double
+    let isDark: Bool
+    let pending: AmbientGate.Pending?
+
+    static let scaleMax = log10(AmbientGateSettings.thresholdRange.upperBound)
+
+    /// 0 ... 1 along the bar. Same function as the slider, so a value sits at the same place on both.
+    static func position(_ v: Double) -> Double {
+        let r = AmbientGateSettings.thresholdRange
+        return log10(min(max(v, r.lowerBound), r.upperBound)) / scaleMax
+    }
+
+    var body: some View {
+        VStack(spacing: 2) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                let x0 = Self.position(threshold) * w
+                let x1 = Self.position(threshold * exitRatio) * w
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.primary.opacity(lux == nil ? 0.04 : 0.08))
+                    Rectangle().fill(Color.orange.opacity(0.18))
+                        .frame(width: max(0, x1 - x0)).offset(x: x0)
+                    if let lux {
+                        Capsule().fill(isDark ? Color.accentColor : Color.secondary)
+                            .frame(width: max(0, Self.position(lux) * w))
+                    }
+                    Rectangle().fill(Color.secondary).frame(width: 1.5).offset(x: x0 - 0.75)
+                    Rectangle().fill(Color.secondary).frame(width: 1.5).offset(x: x1 - 0.75)
+                }
+                .clipShape(Capsule())
+            }
+            .frame(height: 10)
+            .animation(.linear(duration: 0.25), value: lux)   // 1 Hz updates read as motion
+
+            GeometryReader { geo in
+                if let pending {
+                    Rectangle()
+                        .fill(pending.towardDark ? Color.accentColor : Color.secondary)
+                        .frame(width: geo.size.width * pending.progress)
+                }
+            }
+            .frame(height: 2)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Ambient light")
+        .accessibilityValue(lux.map { LuxFormat.string($0).replacingOccurrences(of: "lx", with: "lux") } ?? "no reading")
     }
 }

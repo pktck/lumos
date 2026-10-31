@@ -34,6 +34,20 @@ final class AppState: ObservableObject {
     @Published private(set) var isAdapting = false
     /// The ambient-light gate's decision: true while the room counts as dark.
     @Published private(set) var gateIsDark = false
+    /// The reading the gate is acting on, for the lux bar. Flushed only while the popover is open.
+    @Published private(set) var ambientLux: Double?
+    /// Dwell progress of a flip the gate is waiting out, for the bar. Same flush rule.
+    @Published private(set) var gatePending: AmbientGate.Pending?
+    @Published var gateSettings = AmbientGateSettings() {
+        didSet {
+            // Observers don't re-fire for an assignment inside their own didSet.
+            let clamped = gateSettings.clamped()
+            if clamped != gateSettings { gateSettings = clamped }
+            settingsStore.save(gateSettings)
+            applyGateSettings()
+            reconcile()
+        }
+    }
     @Published var displays: [DisplayVM] = []
     @Published var ignoredApps: [IgnoredAppVM] = []
     @Published var currentApp: CurrentAppVM?
@@ -47,15 +61,16 @@ final class AppState: ObservableObject {
 
     private let coordinator = DisplayCoordinator()
 
-    // Ambient-light gate: adapt only while the room is dark. Settings arrive in a later commit;
-    // until then the gate is on with the AmbientGate defaults (dark below 50 lx).
-    private let gateEnabled = true
+    // Ambient-light gate: adapt only while the room is dark.
+    private let settingsStore = AmbientGateSettingsStore()
     private let ambient = AmbientLightMonitor(source: CompositeLuxSource())
     private let gate = AmbientGate()
     private var polling = false
     private var latestLux: Double?          // unflushed live value
     private var sensorUnreadable = false    // symbols resolved, but the last reading was nil (lid closed)
     var ambientAvailable: Bool { ambient.isAvailable }
+    /// The bar marks the off threshold at `threshold * gateExitRatio`; one source of truth.
+    var gateExitRatio: Double { gate.exitRatio }
 
     // Live values + throttled flush so the popover doesn't rebuild on every frame.
     private var lumByID: [CGDirectDisplayID: Double] = [:]
@@ -92,6 +107,8 @@ final class AppState: ObservableObject {
         }
         coordinator.onIgnoreStateChanged = { [weak self] in self?.refreshIgnoreState() }
 
+        gateSettings = settingsStore.load()   // no didSet in init, so apply by hand
+        applyGateSettings()
         gate.onChange = { [weak self] dark in
             guard let self else { return }
             NSLog("Lumos: ambient gate %@ (%.0f lx)", dark ? "dark" : "bright", self.latestLux ?? -1)
@@ -128,19 +145,25 @@ final class AppState: ObservableObject {
         reconcile()
     }
 
+    private func applyGateSettings() {
+        gate.threshold = gateSettings.thresholdLux
+        gate.enterDelay = gateSettings.enterDelay
+        gate.exitDelay = gateSettings.exitDelay
+    }
+
     /// The single place that decides whether the sensor is polled and whether the engines run.
     /// Idempotent and cheap: call it after any input changes.
     private func reconcile() {
-        let gateArmed = isEnabled && gateEnabled && ambient.isAvailable
+        let gateArmed = isEnabled && gateSettings.enabled && ambient.isAvailable
         gateArmed ? startPolling() : stopPolling()
 
         let shouldRun: Bool
         if !isEnabled {
             shouldRun = false
-        } else if !gateEnabled {
+        } else if !gateSettings.enabled {
             shouldRun = true                                   // stock Lumos
         } else if !ambient.isAvailable || sensorUnreadable {
-            shouldRun = true                                   // fail open: no reading, adapt anyway
+            shouldRun = gateSettings.whenUnavailable == .adapt // fail open by default
         } else {
             shouldRun = gate.isDark
         }
@@ -159,6 +182,7 @@ final class AppState: ObservableObject {
             self.sensorUnreadable = (lux == nil)
             self.gate.ingest(lux: lux)                          // may call onChange, which reconciles
             if wasUnreadable != self.sensorUnreadable { self.reconcile() }
+            self.scheduleFlush()                                // bar and countdown refresh, popover-open only
         }
     }
 
@@ -170,6 +194,8 @@ final class AppState: ObservableObject {
         latestLux = nil
         sensorUnreadable = false
         gateIsDark = false
+        ambientLux = nil
+        gatePending = nil
     }
 
     private func startEngines() {
@@ -303,6 +329,10 @@ final class AppState: ObservableObject {
 
     private func rebuildDisplays(force: Bool = false) {
         guard force || popoverVisible else { return }
+        // The ambient readout rides the same flush as the rows, so it never publishes while the
+        // popover is closed and is fresh on open.
+        ambientLux = latestLux
+        gatePending = gate.pending()
         displays = coordinator.displays.map { info in
             DisplayVM(id: info.displayID,
                       name: info.name,
