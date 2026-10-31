@@ -32,6 +32,8 @@ final class AppState: ObservableObject {
     /// True while the coordinator is running. Equal to `isEnabled` unless something is holding
     /// the engines back on the user's behalf.
     @Published private(set) var isAdapting = false
+    /// The ambient-light gate's decision: true while the room counts as dark.
+    @Published private(set) var gateIsDark = false
     @Published var displays: [DisplayVM] = []
     @Published var ignoredApps: [IgnoredAppVM] = []
     @Published var currentApp: CurrentAppVM?
@@ -44,6 +46,16 @@ final class AppState: ObservableObject {
     let builtInBrightnessAvailable: Bool
 
     private let coordinator = DisplayCoordinator()
+
+    // Ambient-light gate: adapt only while the room is dark. Settings arrive in a later commit;
+    // until then the gate is on with the AmbientGate defaults (dark below 50 lx).
+    private let gateEnabled = true
+    private let ambient = AmbientLightMonitor(source: CompositeLuxSource())
+    private let gate = AmbientGate()
+    private var polling = false
+    private var latestLux: Double?          // unflushed live value
+    private var sensorUnreadable = false    // symbols resolved, but the last reading was nil (lid closed)
+    var ambientAvailable: Bool { ambient.isAvailable }
 
     // Live values + throttled flush so the popover doesn't rebuild on every frame.
     private var lumByID: [CGDirectDisplayID: Double] = [:]
@@ -80,11 +92,14 @@ final class AppState: ObservableObject {
         }
         coordinator.onIgnoreStateChanged = { [weak self] in self?.refreshIgnoreState() }
 
-        activateIfLaunchedAtLogin()
+        gate.onChange = { [weak self] dark in
+            guard let self else { return }
+            NSLog("Lumos: ambient gate %@ (%.0f lx)", dark ? "dark" : "bright", self.latestLux ?? -1)
+            self.gateIsDark = dark
+            self.reconcile()
+        }
 
-        #if DEBUG
-        AmbientLightDebugLog.start()
-        #endif
+        activateIfLaunchedAtLogin()
     }
 
     /// Auto-brightness is a per-session switch: it always starts off. That's fine when you open
@@ -113,13 +128,48 @@ final class AppState: ObservableObject {
         reconcile()
     }
 
-    /// The single place that decides whether the engines run. Idempotent and cheap: call it
-    /// after any input changes. Keeping the decision separate from `setEnabled` lets something
-    /// other than the toggle (the ambient-light gate) start and stop the engines.
+    /// The single place that decides whether the sensor is polled and whether the engines run.
+    /// Idempotent and cheap: call it after any input changes.
     private func reconcile() {
-        let shouldRun = isEnabled
+        let gateArmed = isEnabled && gateEnabled && ambient.isAvailable
+        gateArmed ? startPolling() : stopPolling()
+
+        let shouldRun: Bool
+        if !isEnabled {
+            shouldRun = false
+        } else if !gateEnabled {
+            shouldRun = true                                   // stock Lumos
+        } else if !ambient.isAvailable || sensorUnreadable {
+            shouldRun = true                                   // fail open: no reading, adapt anyway
+        } else {
+            shouldRun = gate.isDark
+        }
+
         if shouldRun, !isAdapting { startEngines() }
         if !shouldRun, isAdapting { stopEngines() }
+    }
+
+    private func startPolling() {
+        guard !polling else { return }
+        polling = true
+        ambient.start { [weak self] lux in                     // main thread, ~1 Hz
+            guard let self else { return }
+            self.latestLux = lux
+            let wasUnreadable = self.sensorUnreadable
+            self.sensorUnreadable = (lux == nil)
+            self.gate.ingest(lux: lux)                          // may call onChange, which reconciles
+            if wasUnreadable != self.sensorUnreadable { self.reconcile() }
+        }
+    }
+
+    private func stopPolling() {
+        guard polling else { return }
+        polling = false
+        ambient.stop()
+        gate.reset()
+        latestLux = nil
+        sensorUnreadable = false
+        gateIsDark = false
     }
 
     private func startEngines() {

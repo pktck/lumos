@@ -26,6 +26,7 @@
 		9AFA0E4D9748CB8CE32D680E /* AmbientGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AACB12B220F98493ED07728 /* AmbientGate.swift */; };
 		2222222222222222222222C1 /* AmbientGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111111111111111111111C1 /* AmbientGateTests.swift */; };
 		2222222222222222222222C2 /* AmbientGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AACB12B220F98493ED07728 /* AmbientGate.swift */; };
+		9DC9BD889BD03872D0BB744A /* AmbientLightMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BBFC5A7C3D11F7AC71C6307 /* AmbientLightMonitor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -50,6 +51,7 @@
 		2AACB12B220F98493ED07728 /* AmbientGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientGate.swift; sourceTree = "<group>"; };
 		1111111111111111111111C1 /* AmbientGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientGateTests.swift; sourceTree = "<group>"; };
 		3333333333333333333333C2 /* LumosTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LumosTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9BBFC5A7C3D11F7AC71C6307 /* AmbientLightMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientLightMonitor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -100,6 +102,7 @@
 				1111111111111111111111B0 /* Assets.xcassets */,
 				053DB96858039D07E257F199 /* AmbientLightReader.swift */,
 				2AACB12B220F98493ED07728 /* AmbientGate.swift */,
+				9BBFC5A7C3D11F7AC71C6307 /* AmbientLightMonitor.swift */,
 			);
 			path = Lumos;
 			sourceTree = "<group>";
@@ -234,6 +237,7 @@
 				2222222222222222222222BE /* IgnoredAppsStore.swift in Sources */,
 				F05D24727F7989EE71D091E1 /* AmbientLightReader.swift in Sources */,
 				9AFA0E4D9748CB8CE32D680E /* AmbientGate.swift in Sources */,
+				9DC9BD889BD03872D0BB744A /* AmbientLightMonitor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

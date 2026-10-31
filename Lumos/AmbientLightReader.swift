@@ -92,27 +92,3 @@ final class CompositeLuxSource: AmbientLightSource {
         return lux
     }
 }
-
-#if DEBUG
-/// Logs one reading a second so the app's scale can be checked against `tools/ambient-probe.swift`.
-/// Debug builds only; the monitor and the menu's lux bar take over from here in later commits.
-enum AmbientLightDebugLog {
-    private static var timer: DispatchSourceTimer?
-
-    static func start() {
-        let source = CompositeLuxSource()
-        guard source.isAvailable else { return }
-        let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "Lumos.ambient.debug", qos: .utility))
-        t.schedule(deadline: .now(), repeating: 1.0, leeway: .milliseconds(200))
-        t.setEventHandler {
-            if let lux = source.readLux() {
-                NSLog("Lumos: ambient %.1f lx", lux)
-            } else {
-                NSLog("Lumos: ambient no reading")
-            }
-        }
-        t.resume()
-        timer = t
-    }
-}
-#endif
