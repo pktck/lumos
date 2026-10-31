@@ -77,6 +77,10 @@ final class AppState: ObservableObject {
         coordinator.onIgnoreStateChanged = { [weak self] in self?.refreshIgnoreState() }
 
         activateIfLaunchedAtLogin()
+
+        #if DEBUG
+        AmbientLightDebugLog.start()
+        #endif
     }
 
     /// Auto-brightness is a per-session switch: it always starts off. That's fine when you open
