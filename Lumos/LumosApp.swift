@@ -372,28 +372,40 @@ struct AmbientSection: View {
                             onCommit: { lux in state.gateSettings.thresholdLux = LuxFormat.twoSignificant(lux) })
 
                 DisclosureGroup("Auto-enable timing", isExpanded: $timingExpanded) {
+                    // Each row hugs the left edge; the labels share a width so the controls
+                    // line up in a column.
                     VStack(alignment: .leading, spacing: 4) {
-                        Stepper("Start after \(Int(settings.enterDelay)) s", value: Binding(
+                        Stepper(value: Binding(
                             get: { settings.enterDelay },
                             set: { state.gateSettings.enterDelay = $0 }
-                        ), in: AmbientGateSettings.enterDelayRange, step: 1)
-                        Stepper("Stop after \(Int(settings.exitDelay)) s", value: Binding(
+                        ), in: AmbientGateSettings.enterDelayRange, step: 1) {
+                            timingLabel("Start after \(Int(settings.enterDelay)) s")
+                        }
+                        Stepper(value: Binding(
                             get: { settings.exitDelay },
                             set: { state.gateSettings.exitDelay = $0 }
-                        ), in: AmbientGateSettings.exitDelayRange, step: 5)
-                        Stepper(settings.fadeDuration > 0 ? "Fade \(LuxFormat.seconds(settings.fadeDuration))" : "Fade off",
-                                value: Binding(
-                                    get: { settings.fadeDuration },
-                                    set: { state.gateSettings.fadeDuration = $0 }
-                                ), in: AmbientGateSettings.fadeDurationRange, step: 0.5)
+                        ), in: AmbientGateSettings.exitDelayRange, step: 5) {
+                            timingLabel("Stop after \(Int(settings.exitDelay)) s")
+                        }
+                        Stepper(value: Binding(
+                            get: { settings.fadeDuration },
+                            set: { state.gateSettings.fadeDuration = $0 }
+                        ), in: AmbientGateSettings.fadeDurationRange, step: 0.5) {
+                            timingLabel(settings.fadeDuration > 0 ? "Fade \(LuxFormat.seconds(settings.fadeDuration))" : "Fade off")
+                        }
                     }
                     .font(.caption)
                     .padding(.top, 2)
                     .padding(.leading, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .font(.caption)
             }
         }
+    }
+
+    private func timingLabel(_ text: String) -> some View {
+        Text(text).monospacedDigit().frame(minWidth: 92, alignment: .leading)
     }
 }
 
