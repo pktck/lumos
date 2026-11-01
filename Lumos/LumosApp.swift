@@ -18,6 +18,8 @@ struct LumosApp: App {
 
 struct ContentView: View {
     @ObservedObject var state: AppState
+    /// Initial state of the timing disclosure; only the debug snapshot sets it.
+    var timingExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -34,7 +36,7 @@ struct ContentView: View {
             }
 
             if state.isEnabled {
-                AmbientSection(state: state)
+                AmbientSection(state: state, timingExpanded: timingExpanded)
             }
 
             if state.isAdapting {
@@ -341,7 +343,12 @@ struct DisplayRow: View {
 /// expected the bar is the first place to look.
 struct AmbientSection: View {
     @ObservedObject var state: AppState
-    @State private var timingExpanded = false
+    @State private var timingExpanded: Bool
+
+    init(state: AppState, timingExpanded: Bool = false) {
+        _state = ObservedObject(wrappedValue: state)
+        _timingExpanded = State(initialValue: timingExpanded)
+    }
 
     private var settings: AmbientGateSettings { state.gateSettings }
 

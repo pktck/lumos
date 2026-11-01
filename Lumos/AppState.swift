@@ -120,6 +120,9 @@ final class AppState: ObservableObject {
         }
 
         activateIfLaunchedAtLogin()
+        #if DEBUG
+        DebugSnapshot.install(state: self)
+        #endif
     }
 
     /// Auto-brightness is a per-session switch: it always starts off. That's fine when you open
