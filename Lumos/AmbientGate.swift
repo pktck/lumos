@@ -12,6 +12,10 @@ final class AmbientGate {
 
     private(set) var isDark = false
     private var candidateSince: Date?
+    /// True until the first reading after a start or reset: that reading sets the state at
+    /// once. The dwell filters changes while the gate is running; it has nothing to filter at
+    /// the moment the user turns the gate on, and waiting then reads as the toggle not working.
+    private var settling = true
     /// Fires once per flip, on the caller's thread.
     var onChange: ((Bool) -> Void)?
 
@@ -40,13 +44,22 @@ final class AmbientGate {
     }
 
     /// Feed one reading. nil (no reading) holds the current state and clears any pending flip.
-    /// A flip needs its condition to hold for the whole dwell; any tick that disagrees restarts
+    /// The first reading after a start or reset sets the state outright; after that a flip
+    /// needs its condition to hold for the whole dwell, and any tick that disagrees restarts
     /// the clock. Changing `threshold` or the delays simply takes effect on the next tick.
     func ingest(lux: Double?, at now: Date = Date()) {
         guard let lux else { candidateSince = nil; return }
         // Entering is inclusive: the sensor's floor reading is 1 lx, the same as the lowest
         // settable threshold, and "enable below 1 lx" has to be reachable there.
         let wantsDark = isDark ? lux < threshold * exitRatio : lux <= threshold
+        if settling {
+            settling = false
+            if wantsDark != isDark {
+                isDark = wantsDark
+                onChange?(isDark)
+            }
+            return
+        }
         guard wantsDark != isDark else { candidateSince = nil; return }
         let since = candidateSince ?? now
         candidateSince = since
@@ -69,10 +82,11 @@ final class AmbientGate {
                        remaining: max(0, required - elapsed))
     }
 
-    /// Back to bright with no pending flip and no callback. Call when polling stops; the caller
-    /// reconciles afterwards.
+    /// Back to bright with no pending flip and no callback, and the next reading settles the
+    /// state at once. Call when polling stops; the caller reconciles afterwards.
     func reset() {
         isDark = false
         candidateSince = nil
+        settling = true
     }
 }

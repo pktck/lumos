@@ -14,6 +14,9 @@ final class AmbientGateTests: XCTestCase {
         gate.threshold = 50
         flips = []
         gate.onChange = { [unowned self] dark in self.flips.append(dark) }
+        // The first reading after a start settles the state outright (see the tests at the
+        // end); every other test wants a running gate, so give it one bright reading first.
+        gate.ingest(lux: 1000, at: at(-10))
     }
 
     private func at(_ seconds: TimeInterval) -> Date { t0.addingTimeInterval(seconds) }
@@ -143,5 +146,31 @@ final class AmbientGateTests: XCTestCase {
         feed(1, from: 27, through: 32)
         XCTAssertTrue(gate.isDark, "back at the floor, the gate engages again")
         XCTAssertEqual(flips, [true, false, true])
+    }
+
+    /// Turning the gate on in a dark room should engage it on the first reading, not after
+    /// the dwell: there is nothing to filter yet, and a wait reads as the toggle not working.
+    func testFirstReadingSettlesWithoutDwell() {
+        let fresh = AmbientGate()
+        fresh.threshold = 50
+        var seen: [Bool] = []
+        fresh.onChange = { seen.append($0) }
+        fresh.ingest(lux: 30, at: at(0))
+        XCTAssertTrue(fresh.isDark)
+        XCTAssertEqual(seen, [true])
+        XCTAssertNil(fresh.pending(at: at(0)))
+        // From then on the dwell applies.
+        fresh.ingest(lux: 500, at: at(1))
+        XCTAssertTrue(fresh.isDark)
+        XCTAssertNotNil(fresh.pending(at: at(1)))
+    }
+
+    func testResetSettlesOnNextReading() {
+        makeDark()
+        gate.reset()
+        XCTAssertFalse(gate.isDark)
+        gate.ingest(lux: 30, at: at(20))
+        XCTAssertTrue(gate.isDark, "the first reading after a reset sets the state at once")
+        XCTAssertEqual(flips, [true])
     }
 }
