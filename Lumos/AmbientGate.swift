@@ -5,7 +5,7 @@ import Foundation
 /// times stop single events (a flashlight, a hand over the sensor, a door opening) from flipping
 /// it at all. No timers and no smoothing: the dwell is the filter.
 final class AmbientGate {
-    var threshold: Double = 50          // lux. Dark below this.
+    var threshold: Double = 50          // lux. Dark at or below this.
     var exitRatio: Double = 2.0         // Bright again only above threshold * exitRatio.
     var enterDelay: TimeInterval = 5    // Lights off: start adapting soon.
     var exitDelay: TimeInterval = 20    // Lights on: do not bail on a passing light.
@@ -44,7 +44,9 @@ final class AmbientGate {
     /// the clock. Changing `threshold` or the delays simply takes effect on the next tick.
     func ingest(lux: Double?, at now: Date = Date()) {
         guard let lux else { candidateSince = nil; return }
-        let wantsDark = isDark ? lux < threshold * exitRatio : lux < threshold
+        // Entering is inclusive: the sensor's floor reading is 1 lx, the same as the lowest
+        // settable threshold, and "enable below 1 lx" has to be reachable there.
+        let wantsDark = isDark ? lux < threshold * exitRatio : lux <= threshold
         guard wantsDark != isDark else { candidateSince = nil; return }
         let since = candidateSince ?? now
         candidateSince = since

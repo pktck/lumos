@@ -129,4 +129,19 @@ final class AmbientGateTests: XCTestCase {
         XCTAssertFalse(gate.isDark)
         XCTAssertNotNil(gate.pending(at: at(3)))
     }
+
+    /// The sensor floors at 1 lx, the lowest settable threshold. A reading equal to the
+    /// threshold must count as dark, or "enable below 1 lx" could never re-engage after a
+    /// bright spell.
+    func testThresholdAtSensorFloorReengages() {
+        gate.threshold = 1
+        gate.exitRatio = 1.2
+        feed(1, from: 0, through: 5)
+        XCTAssertTrue(gate.isDark, "a reading at the threshold counts as dark")
+        feed(5, from: 6, through: 26)
+        XCTAssertFalse(gate.isDark)
+        feed(1, from: 27, through: 32)
+        XCTAssertTrue(gate.isDark, "back at the floor, the gate engages again")
+        XCTAssertEqual(flips, [true, false, true])
+    }
 }
