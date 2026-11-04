@@ -76,11 +76,13 @@ If you only want Lumos working after the lights go down, turn on **Dark room onl
 Auto-brightness toggle. Lumos then reads the MacBook's ambient light sensor once a
 second and adapts only while the room is darker than the threshold you set; in a bright room it
 leaves the brightness alone and doesn't capture the screen at all, and a line under the
-Auto-brightness toggle says "Paused · room is bright". The bar in the menu shows the
-current reading on a log scale; drag the marker on it to set the threshold. The gate releases a little
-above that level so a flickering light does not toggle it. When the gate engages, brightness fades to the
-content level over a couple of seconds; when it releases, it fades back to where it was before.
-The dwell and fade times are under **Auto-enable timing**.
+Auto-brightness toggle says "Paused · room is bright". The bar in the menu is a log
+scale of room brightness: the dot is the current reading and the shaded zone left of the knob is
+where auto-brightness runs, so drag the knob past the dot to set the level. The gate releases a
+little above that level so a flickering light does not toggle it. When the gate engages, brightness
+fades to the content level over a couple of seconds; when it releases, it fades back to where it
+was before. How long the room must stay dark or bright before a switch, and the fade length, are
+the three menus under **Auto-enable timing**.
 
 `tools/ambient-probe.swift` prints the raw sensor readings if you want to see what a given room
 measures before choosing a threshold.

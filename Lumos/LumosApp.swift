@@ -349,9 +349,9 @@ struct DisplayRow: View {
     }
 }
 
-/// Ambient-light gate: adapt only while the room is darker than a threshold. Shows the live
-/// reading on a log scale with both thresholds marked, so when the gate hasn't done what you
-/// expected the bar is the first place to look.
+/// Ambient-light gate: adapt only while the room is darker than a threshold. One card holds the
+/// gate's toggle, the live reading against the threshold, and the dwell times, so when the gate
+/// hasn't done what you expected the card is the one place to look.
 struct AmbientSection: View {
     @ObservedObject var state: AppState
     @State private var timingExpanded: Bool
@@ -370,6 +370,7 @@ struct AmbientSection: View {
                 set: { state.gateSettings.enabled = $0 }
             ))
             .toggleStyle(.switch)
+            .controlSize(.small)
             .disabled(!state.ambientAvailable)
 
             if !state.ambientAvailable {
@@ -382,27 +383,19 @@ struct AmbientSection: View {
                             onCommit: { lux in state.gateSettings.thresholdLux = LuxFormat.twoSignificant(lux) })
 
                 DisclosureGroup("Auto-enable timing", isExpanded: $timingExpanded) {
-                    // Each row hugs the left edge; the labels share a width so the controls
-                    // line up in a column.
                     VStack(alignment: .leading, spacing: 4) {
-                        Stepper(value: Binding(
+                        DelayPicker("Dark for", value: Binding(
                             get: { settings.enterDelay },
                             set: { state.gateSettings.enterDelay = $0 }
-                        ), in: AmbientGateSettings.enterDelayRange, step: 1) {
-                            timingLabel("Start after \(Int(settings.enterDelay)) s")
-                        }
-                        Stepper(value: Binding(
+                        ), presets: [1, 2, 5, 10, 30])
+                        DelayPicker("Bright for", value: Binding(
                             get: { settings.exitDelay },
                             set: { state.gateSettings.exitDelay = $0 }
-                        ), in: AmbientGateSettings.exitDelayRange, step: 5) {
-                            timingLabel("Stop after \(Int(settings.exitDelay)) s")
-                        }
-                        Stepper(value: Binding(
+                        ), presets: [5, 15, 30, 60, 120, 300])
+                        DelayPicker("Fade over", value: Binding(
                             get: { settings.fadeDuration },
                             set: { state.gateSettings.fadeDuration = $0 }
-                        ), in: AmbientGateSettings.fadeDurationRange, step: 0.5) {
-                            timingLabel(settings.fadeDuration > 0 ? "Fade \(LuxFormat.seconds(settings.fadeDuration))" : "Fade off")
-                        }
+                        ), presets: [0, 0.5, 1, 2, 5])
                     }
                     .font(.caption)
                     .padding(.top, 2)
@@ -412,16 +405,42 @@ struct AmbientSection: View {
                 .font(.caption)
             }
         }
-    }
-
-    private func timingLabel(_ text: String) -> some View {
-        Text(text).monospacedDigit().frame(minWidth: 92, alignment: .leading)
+        .padding(8)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
-/// The part of the section that follows the sensor: level label, bar and the reading line.
-/// It observes `AmbientReadout` alone, so a new reading redraws these three rows and nothing
-/// else in the popover.
+/// A pop-up of preset seconds. A stored value outside the presets (an older build's stepper
+/// could set any second) is listed too, so the menu always shows what is in effect.
+private struct DelayPicker: View {
+    let title: String
+    @Binding var value: TimeInterval
+    let presets: [TimeInterval]
+
+    init(_ title: String, value: Binding<TimeInterval>, presets: [TimeInterval]) {
+        self.title = title
+        _value = value
+        self.presets = presets
+    }
+
+    private var options: [TimeInterval] {
+        presets.contains(value) ? presets : (presets + [value]).sorted()
+    }
+
+    var body: some View {
+        Picker(title, selection: $value) {
+            ForEach(options, id: \.self) { s in
+                Text(s == 0 ? "Off" : LuxFormat.seconds(s)).tag(s)
+            }
+        }
+        .pickerStyle(.menu)
+        .controlSize(.small)
+        .fixedSize()
+    }
+}
+
+/// The part of the card that follows the sensor: the rule, the bar and the reading line. It
+/// observes `AmbientReadout` alone, so a new reading redraws these rows and nothing else.
 private struct AmbientLive: View {
     @ObservedObject var readout: AmbientReadout
     let threshold: Double
@@ -433,13 +452,10 @@ private struct AmbientLive: View {
     private var previewThreshold: Double { dragging ?? threshold }
 
     var body: some View {
-        HStack {
-            Text("Auto enable level")
-            Spacer()
-            Text(LuxFormat.string(previewThreshold)).monospacedDigit()
-        }
-        .font(.caption2)
-        .foregroundStyle(.secondary)
+        Text("Enable below \(LuxFormat.string(previewThreshold))")
+            .monospacedDigit()
+            .font(.caption2)
+            .foregroundStyle(.secondary)
 
         LuxBar(lux: readout.lux, threshold: previewThreshold,
                pending: readout.pending,
@@ -447,8 +463,7 @@ private struct AmbientLive: View {
                onCommit: { lux in onCommit(lux); dragging = nil })
 
         HStack {
-            Text("Room brightness: \(readout.lux.map { LuxFormat.string($0) } ?? "no reading")")
-                .monospacedDigit()
+            Text(reading).monospacedDigit()
             Spacer()
             if let pending = readout.pending {
                 // Counts on its own clock: the pending value is constant for the whole dwell.
@@ -456,26 +471,26 @@ private struct AmbientLive: View {
                     let secs = Int(pending.remaining(at: context.date).rounded(.up))
                     Text(pending.towardDark ? "dark in \(secs) s" : "bright in \(secs) s")
                 }
-            } else {
-                Text(status)
             }
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
+        .lineLimit(1)
     }
 
-    /// Right-hand caption outside a dwell: only the no-reading case, since the line under the
-    /// Auto-brightness toggle already says whether it is adapting.
-    private var status: String {
-        guard readout.lux == nil else { return "" }
-        return isAdapting ? "lid closed · adapting anyway" : "lid closed · paused"
+    /// The reading, or, with none, what the gate does about it; the line under the
+    /// Auto-brightness toggle covers the bright-room pause.
+    private var reading: String {
+        if let lux = readout.lux { return "Room brightness: \(LuxFormat.string(lux))" }
+        return isAdapting ? "Lid closed · adapting anyway" : "Lid closed · paused"
     }
 }
 
-/// The live reading as a horizontal bar on a log scale, and the threshold control: a slider
-/// knob sits at the on threshold. Reading left of the knob: the gate is or will be dark; right
-/// of it: bright. The release threshold sits a little above the knob (the gate's exit ratio)
-/// and is not drawn. A thin line underneath fills with the dwell while a flip is pending.
+/// The threshold control and the live reading on one log-scale bar. The zone left of the knob
+/// is shaded: readings there enable auto-brightness, readings to the right pause it. The
+/// reading is a dot, so the picture is "where the room is, against where it switches". The
+/// release threshold (the gate's exit ratio above the knob) is not drawn. A thin line
+/// underneath fills with the dwell while a flip is pending, and landmarks sit below the bar.
 struct LuxBar: View {
     let lux: Double?
     let threshold: Double
@@ -487,34 +502,50 @@ struct LuxBar: View {
     static let scaleMax = log10(AmbientGateSettings.thresholdRange.upperBound)
     private static let trackHeight: CGFloat = 10
     private static let knobSize = CGSize(width: 14, height: 22)
+    private static let dotSize: CGFloat = 7
+    private static let landmarks: [Double] = [10, 100, 1000]
 
-    /// 0 ... 1 along the bar.
+    /// 0 ... 1 along the scale.
     static func position(_ v: Double) -> Double {
         let r = AmbientGateSettings.thresholdRange
         return log10(min(max(v, r.lowerBound), r.upperBound)) / scaleMax
     }
 
-    /// The inverse: lux for a point along the bar, clamped to the settable range.
+    /// The inverse: lux for a point along the scale, clamped to the settable range.
     static func lux(atFraction f: Double) -> Double {
         let r = AmbientGateSettings.thresholdRange
         return min(max(pow(10, min(max(f, 0), 1) * scaleMax), r.lowerBound), r.upperBound)
     }
 
+    /// The scale is inset by half a knob at both ends, like the system slider, so the knob
+    /// stays inside the track at the extremes.
+    private static func x(_ v: Double, width w: CGFloat) -> CGFloat {
+        knobSize.width / 2 + position(v) * (w - knobSize.width)
+    }
+
+    private static func fraction(atX x: CGFloat, width w: CGFloat) -> Double {
+        (x - knobSize.width / 2) / max(w - knobSize.width, 1)
+    }
+
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 2) {
             GeometryReader { geo in
                 let w = geo.size.width
-                let x0 = Self.position(threshold) * w
+                let x0 = Self.x(threshold, width: w)
                 ZStack(alignment: .leading) {
                     ZStack(alignment: .leading) {
-                        Capsule().fill(Color.primary.opacity(lux == nil ? 0.04 : 0.08))
-                        if let lux {
-                            Capsule().fill(Color.secondary)
-                                .frame(width: max(0, Self.position(lux) * w))
-                        }
+                        Capsule().fill(Color.primary.opacity(0.06))
+                        Rectangle().fill(Color.primary.opacity(0.18)).frame(width: x0)
                     }
                     .frame(height: Self.trackHeight)
                     .clipShape(Capsule())
+
+                    if let lux {
+                        Circle().fill(Color.primary.opacity(0.85))
+                            .overlay(Circle().strokeBorder(Color(nsColor: .windowBackgroundColor), lineWidth: 1))
+                            .frame(width: Self.dotSize, height: Self.dotSize)
+                            .offset(x: Self.x(lux, width: w) - Self.dotSize / 2)
+                    }
 
                     // The knob, drawn like the system slider's so it reads as the control it is.
                     Capsule()
@@ -528,8 +559,8 @@ struct LuxBar: View {
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
-                        .onChanged { v in onDrag(Self.lux(atFraction: v.location.x / w)) }
-                        .onEnded { v in onCommit(Self.lux(atFraction: v.location.x / w)) }
+                        .onChanged { v in onDrag(Self.lux(atFraction: Self.fraction(atX: v.location.x, width: w))) }
+                        .onEnded { v in onCommit(Self.lux(atFraction: Self.fraction(atX: v.location.x, width: w))) }
                 )
             }
             .frame(height: Self.knobSize.height)
@@ -542,15 +573,25 @@ struct LuxBar: View {
                 if let pending {
                     TimelineView(.animation) { context in
                         Rectangle()
-                            .fill(Color.primary.opacity(0.5))
+                            .fill(Color.orange.opacity(0.9))
                             .frame(width: geo.size.width * pending.progress(at: context.date))
                     }
                 }
             }
             .frame(height: 2)
+
+            GeometryReader { geo in
+                ForEach(Self.landmarks, id: \.self) { v in
+                    Text(String(Int(v)))
+                        .font(.system(size: 8))
+                        .foregroundStyle(.tertiary)
+                        .position(x: Self.x(v, width: geo.size.width), y: 5)
+                }
+            }
+            .frame(height: 10)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Auto enable level, \(LuxFormat.string(threshold))")
+        .accessibilityLabel("Enable below \(LuxFormat.string(threshold))")
         .accessibilityValue(lux.map { "room " + LuxFormat.string($0).replacingOccurrences(of: "lx", with: "lux") } ?? "no reading")
         .accessibilityAdjustableAction { direction in
             let factor = direction == .increment ? 1.25 : 0.8
