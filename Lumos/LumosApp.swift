@@ -347,16 +347,17 @@ struct DisplayRow: View {
     }
 }
 
-/// Ambient-light gate: adapt only while the room is darker than a threshold. One card holds the
-/// gate's toggle and the live reading against the threshold, so when the gate hasn't done what
-/// you expected the card is the one place to look. The dwell and fade times are fixed.
+/// Ambient-light gate: adapt only while the room is darker than a threshold. The switch sits
+/// in the popover's column under Auto-brightness; while it is on, a card below it shows the
+/// live reading against the threshold, so when the gate hasn't done what you expected the card
+/// is the one place to look. The dwell and fade times are fixed.
 struct AmbientSection: View {
     @ObservedObject var state: AppState
 
     private var settings: AmbientGateSettings { state.gateSettings }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Toggle("Dark room only", isOn: Binding(
                 get: { settings.enabled },
                 set: { state.gateSettings.enabled = $0 }
@@ -369,15 +370,17 @@ struct AmbientSection: View {
                 Text("Ambient light sensor unavailable on this macOS")
                     .font(.caption2).foregroundStyle(.secondary)
             } else if settings.enabled {
-                AmbientLive(readout: state.ambientReadout,
-                            threshold: settings.thresholdLux,
-                            isAdapting: state.isAdapting,
-                            onCommit: { lux in state.gateSettings.thresholdLux = LuxFormat.twoSignificant(lux) })
+                VStack(alignment: .leading, spacing: 6) {
+                    AmbientLive(readout: state.ambientReadout,
+                                threshold: settings.thresholdLux,
+                                isAdapting: state.isAdapting,
+                                onCommit: { lux in state.gateSettings.thresholdLux = LuxFormat.twoSignificant(lux) })
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+                .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(8)
-        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
