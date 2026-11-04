@@ -23,12 +23,23 @@ struct ContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Toggle("Auto-brightness", isOn: Binding(
+            Toggle(isOn: Binding(
                 get: { state.isEnabled },
                 set: { state.setEnabled($0) }
-            ))
+            )) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Auto-brightness").font(.headline)
+                    if let status = state.statusLine {
+                        HStack(spacing: 4) {
+                            Image(systemName: status.icon)
+                            Text(status.text)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+            }
             .toggleStyle(.switch)
-            .font(.headline)
 
             if !state.builtInBrightnessAvailable {
                 Label("Brightness control unavailable", systemImage: "exclamationmark.triangle")
@@ -354,7 +365,7 @@ struct AmbientSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Toggle("Auto-enable in dark room", isOn: Binding(
+            Toggle("Dark room only", isOn: Binding(
                 get: { settings.enabled },
                 set: { state.gateSettings.enabled = $0 }
             ))
@@ -455,12 +466,11 @@ private struct AmbientLive: View {
         .foregroundStyle(.secondary)
     }
 
-    /// Right-hand caption outside a dwell: what the gate is doing; empty while it just waits.
+    /// Right-hand caption outside a dwell: only the no-reading case, since the line under the
+    /// Auto-brightness toggle already says whether it is adapting.
     private var status: String {
-        if readout.lux == nil {
-            return isAdapting ? "lid closed · adapting anyway" : "lid closed · paused"
-        }
-        return isAdapting ? "adapting" : ""
+        guard readout.lux == nil else { return "" }
+        return isAdapting ? "lid closed · adapting anyway" : "lid closed · paused"
     }
 }
 

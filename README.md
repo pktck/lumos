@@ -70,10 +70,11 @@ Then launch Lumos — a sun icon appears in your menu bar. Update later with
 
 That's it — switch between a dark editor and a bright browser and watch the brightness follow.
 
-### Auto-enable in dark room
+### Dark room only
 
-If you only want Lumos working after the lights go down, turn on **Auto-enable in dark room**
-under the Auto-brightness toggle. Lumos then reads the MacBook's ambient light sensor once a
+If you only want Lumos working after the lights go down, turn on **Dark room only** under the
+Auto-brightness toggle. A line under that toggle then says whether Lumos is adapting or paused
+and why. Lumos then reads the MacBook's ambient light sensor once a
 second and adapts only while the room is darker than the threshold you set; in a bright room it
 leaves the brightness alone and doesn't capture the screen at all. The bar in the menu shows the
 current reading on a log scale; drag the marker on it to set the threshold, and the shaded band

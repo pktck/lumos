@@ -41,6 +41,17 @@ final class AppState: ObservableObject {
     var ambientLux: Double? { ambientReadout.lux }
     /// Dwell progress of a flip the gate is waiting out, for the bar. Same flush rule.
     var gatePending: AmbientGate.Pending? { ambientReadout.pending }
+
+    /// What auto-brightness is doing and why, for the line under its toggle: the gate holding it
+    /// off is otherwise invisible there. Icons match the menu bar item's.
+    var statusLine: (icon: String, text: String)? {
+        guard isEnabled else { return nil }
+        guard gateSettings.enabled, ambientAvailable else { return ("sun.max.fill", "Adapting") }
+        if isAdapting {
+            return ("sun.max.fill", sensorUnreadable ? "Adapting · lid closed" : "Adapting · room is dark")
+        }
+        return ("sun.min", sensorUnreadable ? "Paused · lid closed" : "Paused · room is bright")
+    }
     @Published var gateSettings = AmbientGateSettings() {
         didSet {
             // Observers don't re-fire for an assignment inside their own didSet.
@@ -70,7 +81,9 @@ final class AppState: ObservableObject {
     private let gate = AmbientGate()
     private var polling = false
     private var latestLux: Double?          // unflushed live value
-    private var sensorUnreadable = false    // symbols resolved, but the last reading was nil (lid closed)
+    /// Symbols resolved, but the last reading was nil (lid closed). Published for the status line
+    /// under the toggle; assigned only on change so a closed popover sees no churn.
+    @Published private(set) var sensorUnreadable = false
     var ambientAvailable: Bool { ambient.isAvailable }
     /// The bar marks the off threshold at `threshold * gateExitRatio`; one source of truth.
     var gateExitRatio: Double { gate.exitRatio }
@@ -191,10 +204,11 @@ final class AppState: ObservableObject {
         ambient.start(interval: popoverVisible ? Self.ambientIntervalOpen : Self.ambientIntervalClosed) { [weak self] lux in   // main thread
             guard let self, self.polling else { return }       // a tick can land after stopPolling()
             self.latestLux = lux
-            let wasUnreadable = self.sensorUnreadable
-            self.sensorUnreadable = (lux == nil)
+            let unreadable = (lux == nil)
+            let changed = unreadable != self.sensorUnreadable
+            if changed { self.sensorUnreadable = unreadable }
             self.gate.ingest(lux: lux)                          // may call onChange, which reconciles
-            if wasUnreadable != self.sensorUnreadable { self.reconcile() }
+            if changed { self.reconcile() }
             // The bar follows the reading directly: a tick must not go through the display
             // flush, which republishes the rows and re-evaluates the whole popover.
             if self.popoverVisible { self.ambientReadout.update(lux: lux, pending: self.gate.pending()) }
