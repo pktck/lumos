@@ -18,8 +18,6 @@ struct LumosApp: App {
 
 struct ContentView: View {
     @ObservedObject var state: AppState
-    /// Shows the timing rows without the Option key; only the debug snapshot sets it.
-    var showTiming = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -47,7 +45,7 @@ struct ContentView: View {
             }
 
             if state.isEnabled {
-                AmbientSection(state: state, showTiming: showTiming)
+                AmbientSection(state: state)
             }
 
             if state.isAdapting {
@@ -350,19 +348,10 @@ struct DisplayRow: View {
 }
 
 /// Ambient-light gate: adapt only while the room is darker than a threshold. One card holds the
-/// gate's toggle, the live reading against the threshold, and the dwell times, so when the gate
-/// hasn't done what you expected the card is the one place to look.
+/// gate's toggle and the live reading against the threshold, so when the gate hasn't done what
+/// you expected the card is the one place to look. The dwell and fade times are fixed.
 struct AmbientSection: View {
     @ObservedObject var state: AppState
-    @ObservedObject private var optionKey: OptionKeyWatcher
-    /// Shows the timing rows regardless of the Option key (the debug snapshot).
-    private let showTiming: Bool
-
-    init(state: AppState, showTiming: Bool = false) {
-        _state = ObservedObject(wrappedValue: state)
-        _optionKey = ObservedObject(wrappedValue: state.optionKey)
-        self.showTiming = showTiming
-    }
 
     private var settings: AmbientGateSettings { state.gateSettings }
 
@@ -384,64 +373,11 @@ struct AmbientSection: View {
                             threshold: settings.thresholdLux,
                             isAdapting: state.isAdapting,
                             onCommit: { lux in state.gateSettings.thresholdLux = LuxFormat.twoSignificant(lux) })
-
-                // The dwell and fade rows are a tuning detail: they appear while the Option key
-                // is held, always expanded, and go away with it.
-                if showTiming || optionKey.isDown {
-                    Text("Dark room timing")
-                        .font(.caption)
-                        .padding(.top, 2)
-                    VStack(alignment: .leading, spacing: 4) {
-                        DelayPicker("Dark for", value: Binding(
-                            get: { settings.enterDelay },
-                            set: { state.gateSettings.enterDelay = $0 }
-                        ), presets: [1, 2, 5, 10, 30])
-                        DelayPicker("Bright for", value: Binding(
-                            get: { settings.exitDelay },
-                            set: { state.gateSettings.exitDelay = $0 }
-                        ), presets: [5, 15, 30, 60, 120, 300])
-                        DelayPicker("Fade over", value: Binding(
-                            get: { settings.fadeDuration },
-                            set: { state.gateSettings.fadeDuration = $0 }
-                        ), presets: [0, 0.5, 1, 2, 5])
-                    }
-                    .font(.caption)
-                    .padding(.leading, 12)
-                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-/// A pop-up of preset seconds. A stored value outside the presets (an older build's stepper
-/// could set any second) is listed too, so the menu always shows what is in effect.
-private struct DelayPicker: View {
-    let title: String
-    @Binding var value: TimeInterval
-    let presets: [TimeInterval]
-
-    init(_ title: String, value: Binding<TimeInterval>, presets: [TimeInterval]) {
-        self.title = title
-        _value = value
-        self.presets = presets
-    }
-
-    private var options: [TimeInterval] {
-        presets.contains(value) ? presets : (presets + [value]).sorted()
-    }
-
-    var body: some View {
-        Picker(title, selection: $value) {
-            ForEach(options, id: \.self) { s in
-                Text(s == 0 ? "Off" : LuxFormat.seconds(s)).tag(s)
-            }
-        }
-        .pickerStyle(.menu)
-        .controlSize(.small)
-        .fixedSize()
     }
 }
 

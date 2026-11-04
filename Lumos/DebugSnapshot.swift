@@ -5,7 +5,7 @@ import SwiftUI
 /// Debug builds only: render the menu popover to a PNG on request, so the layout can be checked
 /// from a shell without screen capture or accessibility access. Post the distributed notification
 /// `com.lennartbrocki.Lumos.snapshot` with an optional `path` (where to write the PNG),
-/// `appearance` ("dark" or "light") and `timing` ("1" to show the timing rows as if Option were held).
+/// and `appearance` ("dark" or "light").
 ///
 /// The live popover window is captured when it is on screen; otherwise the same content view is
 /// laid out in an offscreen window with the real app state, at 2× scale.
@@ -22,13 +22,12 @@ enum DebugSnapshot {
             let info = note.userInfo ?? [:]
             let path = (info["path"] as? String) ?? NSTemporaryDirectory() + "lumos-popover.png"
             let dark = (info["appearance"] as? String) == "dark"
-            let timing = (info["timing"] as? String) == "1"
-            Task { @MainActor in render(state: state, to: path, dark: dark, showTiming: timing) }
+            Task { @MainActor in render(state: state, to: path, dark: dark) }
         }
         NSLog("Lumos: debug snapshot hook installed (%@)", notification.rawValue)
     }
 
-    private static func render(state: AppState, to path: String, dark: Bool, showTiming: Bool) {
+    private static func render(state: AppState, to path: String, dark: Bool) {
         if let window = NSApp.windows.first(where: {
             $0.isVisible && String(describing: type(of: $0)).contains("MenuBarExtraWindow")
         }), let view = window.contentView {
@@ -36,7 +35,7 @@ enum DebugSnapshot {
             return
         }
 
-        let root = ContentView(state: state, showTiming: showTiming)
+        let root = ContentView(state: state)
             .background(Color(nsColor: .windowBackgroundColor))
         let host = NSHostingView(rootView: root)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 348, height: 10),
