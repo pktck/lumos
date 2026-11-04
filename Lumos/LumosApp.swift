@@ -18,8 +18,8 @@ struct LumosApp: App {
 
 struct ContentView: View {
     @ObservedObject var state: AppState
-    /// Initial state of the timing disclosure; only the debug snapshot sets it.
-    var timingExpanded = false
+    /// Shows the timing rows without the Option key; only the debug snapshot sets it.
+    var showTiming = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -47,7 +47,7 @@ struct ContentView: View {
             }
 
             if state.isEnabled {
-                AmbientSection(state: state, timingExpanded: timingExpanded)
+                AmbientSection(state: state, showTiming: showTiming)
             }
 
             if state.isAdapting {
@@ -354,11 +354,14 @@ struct DisplayRow: View {
 /// hasn't done what you expected the card is the one place to look.
 struct AmbientSection: View {
     @ObservedObject var state: AppState
-    @State private var timingExpanded: Bool
+    @ObservedObject private var optionKey: OptionKeyWatcher
+    /// Shows the timing rows regardless of the Option key (the debug snapshot).
+    private let showTiming: Bool
 
-    init(state: AppState, timingExpanded: Bool = false) {
+    init(state: AppState, showTiming: Bool = false) {
         _state = ObservedObject(wrappedValue: state)
-        _timingExpanded = State(initialValue: timingExpanded)
+        _optionKey = ObservedObject(wrappedValue: state.optionKey)
+        self.showTiming = showTiming
     }
 
     private var settings: AmbientGateSettings { state.gateSettings }
@@ -382,7 +385,12 @@ struct AmbientSection: View {
                             isAdapting: state.isAdapting,
                             onCommit: { lux in state.gateSettings.thresholdLux = LuxFormat.twoSignificant(lux) })
 
-                DisclosureGroup("Auto-enable timing", isExpanded: $timingExpanded) {
+                // The dwell and fade rows are a tuning detail: they appear while the Option key
+                // is held, always expanded, and go away with it.
+                if showTiming || optionKey.isDown {
+                    Text("Dark room timing")
+                        .font(.caption)
+                        .padding(.top, 2)
                     VStack(alignment: .leading, spacing: 4) {
                         DelayPicker("Dark for", value: Binding(
                             get: { settings.enterDelay },
@@ -398,13 +406,11 @@ struct AmbientSection: View {
                         ), presets: [0, 0.5, 1, 2, 5])
                     }
                     .font(.caption)
-                    .padding(.top, 2)
                     .padding(.leading, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .font(.caption)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(8)
         .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 8))
     }

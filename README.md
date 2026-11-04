@@ -82,7 +82,7 @@ where auto-brightness runs, so drag the knob past the dot to set the level. The 
 little above that level so a flickering light does not toggle it. When the gate engages, brightness
 fades to the content level over a couple of seconds; when it releases, it fades back to where it
 was before. How long the room must stay dark or bright before a switch, and the fade length, are
-the three menus under **Auto-enable timing**.
+three menus under **Dark room timing**, shown while you hold the Option key with the menu open.
 
 `tools/ambient-probe.swift` prints the raw sensor readings if you want to see what a given room
 measures before choosing a threshold.

@@ -38,6 +38,8 @@ final class AppState: ObservableObject {
     /// The live sensor readout, observed by the bar alone: a reading five times a second must
     /// not re-evaluate the whole popover.
     let ambientReadout = AmbientReadout()
+    /// Whether the Option key is held, while the popover is open: reveals the timing rows.
+    let optionKey = OptionKeyWatcher()
     var ambientLux: Double? { ambientReadout.lux }
     /// Dwell progress of a flip the gate is waiting out, for the bar. Same flush rule.
     var gatePending: AmbientGate.Pending? { ambientReadout.pending }
@@ -339,6 +341,7 @@ final class AppState: ObservableObject {
     /// is changing on screen (e.g. a blinking caret produces frames we'd otherwise render for).
     func popoverAppeared() {
         popoverVisible = true
+        optionKey.start()
         rebuildDisplays(force: true)
         refreshIgnoreState(force: true)
         ambient.setInterval(Self.ambientIntervalOpen)
@@ -346,6 +349,7 @@ final class AppState: ObservableObject {
 
     func popoverDisappeared() {
         popoverVisible = false
+        optionKey.stop()
         ambient.setInterval(Self.ambientIntervalClosed)
     }
 
@@ -402,5 +406,37 @@ final class AmbientReadout: ObservableObject {
     func update(lux newLux: Double?, pending newPending: AmbientGate.Pending?) {
         if lux != newLux { lux = newLux }
         if pending != newPending { pending = newPending }
+    }
+}
+
+/// Tracks the Option key while the popover is open. It polls the hardware modifier state
+/// (`NSEvent.modifierFlags`), which needs no key window, no event monitor and no accessibility
+/// grant; the timer runs only between popoverAppeared and popoverDisappeared and publishes
+/// only on a change, so holding or not holding the key costs nothing beyond the poll.
+@MainActor
+final class OptionKeyWatcher: ObservableObject {
+    @Published private(set) var isDown = false
+    private var timer: Timer?
+
+    func start() {
+        guard timer == nil else { return }
+        check()
+        let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.check() }
+        }
+        t.tolerance = 0.02
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        if isDown { isDown = false }
+    }
+
+    private func check() {
+        let down = NSEvent.modifierFlags.contains(.option)
+        if down != isDown { isDown = down }
     }
 }
