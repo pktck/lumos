@@ -82,8 +82,6 @@ final class AppState: ObservableObject {
     /// under the toggle; assigned only on change so a closed popover sees no churn.
     @Published private(set) var sensorUnreadable = false
     var ambientAvailable: Bool { ambient.isAvailable }
-    /// The bar marks the off threshold at `threshold * gateExitRatio`; one source of truth.
-    var gateExitRatio: Double { gate.exitRatio }
 
     // Live values + throttled flush so the popover doesn't rebuild on every frame.
     private var lumByID: [CGDirectDisplayID: Double] = [:]

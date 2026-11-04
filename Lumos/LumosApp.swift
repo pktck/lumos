@@ -378,7 +378,6 @@ struct AmbientSection: View {
             } else if settings.enabled {
                 AmbientLive(readout: state.ambientReadout,
                             threshold: settings.thresholdLux,
-                            exitRatio: state.gateExitRatio,
                             isAdapting: state.isAdapting,
                             onCommit: { lux in state.gateSettings.thresholdLux = LuxFormat.twoSignificant(lux) })
 
@@ -426,7 +425,6 @@ struct AmbientSection: View {
 private struct AmbientLive: View {
     @ObservedObject var readout: AmbientReadout
     let threshold: Double
-    let exitRatio: Double
     let isAdapting: Bool
     let onCommit: (Double) -> Void
     /// Threshold (lux) while the knob is being dragged; nil otherwise, so the committed value shows.
@@ -443,7 +441,7 @@ private struct AmbientLive: View {
         .font(.caption2)
         .foregroundStyle(.secondary)
 
-        LuxBar(lux: readout.lux, threshold: previewThreshold, exitRatio: exitRatio,
+        LuxBar(lux: readout.lux, threshold: previewThreshold,
                pending: readout.pending,
                onDrag: { lux in dragging = lux },
                onCommit: { lux in onCommit(lux); dragging = nil })
@@ -475,14 +473,12 @@ private struct AmbientLive: View {
 }
 
 /// The live reading as a horizontal bar on a log scale, and the threshold control: a slider
-/// knob sits at the on threshold, and the off threshold (× exitRatio) follows it with the band
-/// between them shaded. Reading left of the band: the gate is or will be dark; right of it:
-/// bright; inside it: whatever it already is. A thin line underneath fills with the dwell while
-/// a flip is pending.
+/// knob sits at the on threshold. Reading left of the knob: the gate is or will be dark; right
+/// of it: bright. The release threshold sits a little above the knob (the gate's exit ratio)
+/// and is not drawn. A thin line underneath fills with the dwell while a flip is pending.
 struct LuxBar: View {
     let lux: Double?
     let threshold: Double
-    let exitRatio: Double
     let pending: AmbientGate.Pending?
     /// Threshold (lux) under the pointer while dragging, then the final value once released.
     let onDrag: (Double) -> Void
@@ -509,17 +505,13 @@ struct LuxBar: View {
             GeometryReader { geo in
                 let w = geo.size.width
                 let x0 = Self.position(threshold) * w
-                let x1 = Self.position(threshold * exitRatio) * w
                 ZStack(alignment: .leading) {
                     ZStack(alignment: .leading) {
                         Capsule().fill(Color.primary.opacity(lux == nil ? 0.04 : 0.08))
-                        Rectangle().fill(Color.orange.opacity(0.18))
-                            .frame(width: max(0, x1 - x0)).offset(x: x0)
                         if let lux {
                             Capsule().fill(Color.secondary)
                                 .frame(width: max(0, Self.position(lux) * w))
                         }
-                        Rectangle().fill(Color.secondary).frame(width: 1.5).offset(x: x1 - 0.75)
                     }
                     .frame(height: Self.trackHeight)
                     .clipShape(Capsule())

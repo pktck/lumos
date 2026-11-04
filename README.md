@@ -77,8 +77,8 @@ Auto-brightness toggle. Lumos then reads the MacBook's ambient light sensor once
 second and adapts only while the room is darker than the threshold you set; in a bright room it
 leaves the brightness alone and doesn't capture the screen at all, and a line under the
 Auto-brightness toggle says "Paused · room is bright". The bar in the menu shows the
-current reading on a log scale; drag the marker on it to set the threshold, and the shaded band
-to its right is where the gate stays as it is. When the gate engages, brightness fades to the
+current reading on a log scale; drag the marker on it to set the threshold. The gate releases a little
+above that level so a flickering light does not toggle it. When the gate engages, brightness fades to the
 content level over a couple of seconds; when it releases, it fades back to where it was before.
 The dwell and fade times are under **Auto-enable timing**.
 
