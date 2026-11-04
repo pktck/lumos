@@ -42,15 +42,12 @@ final class AppState: ObservableObject {
     /// Dwell progress of a flip the gate is waiting out, for the bar. Same flush rule.
     var gatePending: AmbientGate.Pending? { ambientReadout.pending }
 
-    /// What auto-brightness is doing and why, for the line under its toggle: the gate holding it
-    /// off is otherwise invisible there. Icons match the menu bar item's.
+    /// The line under the Auto-brightness toggle, shown in the one state that is otherwise
+    /// invisible there: the toggle is on but the gate is holding adaptation off because the
+    /// room is bright. Every other state shows nothing. The icon is the menu bar item's.
     var statusLine: (icon: String, text: String)? {
-        guard isEnabled else { return nil }
-        guard gateSettings.enabled, ambientAvailable else { return ("sun.max.fill", "Adapting") }
-        if isAdapting {
-            return ("sun.max.fill", sensorUnreadable ? "Adapting · lid closed" : "Adapting · room is dark")
-        }
-        return ("sun.min", sensorUnreadable ? "Paused · lid closed" : "Paused · room is bright")
+        guard isEnabled, gateSettings.enabled, ambientAvailable, !isAdapting, !sensorUnreadable else { return nil }
+        return ("sun.min", "Paused · room is bright")
     }
     @Published var gateSettings = AmbientGateSettings() {
         didSet {
