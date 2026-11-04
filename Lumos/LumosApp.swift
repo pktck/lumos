@@ -36,6 +36,7 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .toggleStyle(.switch)
 
@@ -126,8 +127,10 @@ struct LaunchAtLoginToggle: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Toggle("Launch at login", isOn: Binding(get: { isOn }, set: setEnabled))
-                .toggleStyle(.switch)
+            Toggle(isOn: Binding(get: { isOn }, set: setEnabled)) {
+                Text("Launch at login").frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .toggleStyle(.switch)
 
             if let error {
                 Text(error).font(.caption2).foregroundStyle(.red)
@@ -358,10 +361,13 @@ struct AmbientSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Toggle("Dark room only", isOn: Binding(
+            // The three switches in the popover share the right edge, like a settings pane.
+            Toggle(isOn: Binding(
                 get: { settings.enabled },
                 set: { state.gateSettings.enabled = $0 }
-            ))
+            )) {
+                Text("Dark room only").frame(maxWidth: .infinity, alignment: .leading)
+            }
             .toggleStyle(.switch)
             .controlSize(.small)
             .disabled(!state.ambientAvailable)
