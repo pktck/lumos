@@ -369,7 +369,6 @@ struct AmbientSection: View {
                 Text("Dark room only").frame(maxWidth: .infinity, alignment: .leading)
             }
             .toggleStyle(.switch)
-            .controlSize(.small)
             .disabled(!state.ambientAvailable)
 
             if !state.ambientAvailable {
